@@ -1,0 +1,42 @@
+[run]
+source = modules
+branch = true
+parallel = true
+omit =
+    */tests/*
+    */site-packages/*
+    */__init__.py
+    setup.py
+    */venv/*
+    */.venv/*
+
+[report]
+precision = 2
+show_missing = true
+skip_covered = false
+skip_empty = true
+sort = Cover
+
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    @abc.abstractmethod
+    class.*\bProtocol\):
+    \.\.\.$
+
+[html]
+directory = htmlcov
+title = BioStat Easy - Coverage Report
+
+[xml]
+output = coverage.xml
+
+[paths]
+source =
+    modules
+    */site-packages/modules

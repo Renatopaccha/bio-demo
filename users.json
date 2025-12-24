@@ -1,0 +1,7 @@
+{
+    "admin@universidad.edu": {
+        "name": "Administrador",
+        "password": "admin",
+        "role": "admin"
+    }
+}

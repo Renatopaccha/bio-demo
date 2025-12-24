@@ -1,0 +1,666 @@
+/* ========================================
+   BioStat Easy - Modern Medical UI System
+   Diseño: SaaS Médico 2025 + Glassmorphism
+   ======================================== */
+
+/* === 0. FUENTES E IMPORTACIONES === */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap');
+
+/* === 1. VARIABLES DE DISEÑO === */
+:root {
+    /* Glassmorphism Palette */
+    --bg-sidebar: #dde8f3;
+    --menu-bg: rgba(255, 255, 255, 0.5);
+    --accent: #2563eb;
+    --text: #111827;
+    --radius: 12px;
+
+    /* Medical Palette (Legacy) */
+    --clinical-white: #FFFFFF;
+    --medical-blue: #2E86C1;
+    --medical-blue-hover: #2471A3;
+    --dark-gray: #2C3E50;
+    --light-gray: #ECF0F1;
+    --accent-teal: #16A085;
+}
+
+/* === 2. BASE GLOBAL === */
+html,
+body,
+[class*="css"] {
+    font-family: 'Outfit', 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    color: var(--text) !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* === 3. FONDO DE LA APLICACIÓN === */
+.stApp {
+    background: var(--clinical-white) !important;
+}
+
+/* Fondo del área principal */
+[data-testid="stAppViewContainer"] {
+    background: linear-gradient(135deg, #F8FAFB 0%, #FFFFFF 100%) !important;
+}
+
+/* === 4. SIDEBAR GLASSMORPHISM === */
+[data-testid="stSidebar"] {
+    background-color: var(--bg-sidebar) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+    backdrop-filter: blur(10px) !important;
+    box-shadow: 2px 0 12px rgba(37, 99, 235, 0.08) !important;
+}
+
+/* Eliminar espacio blanco excesivo en la parte superior de la barra lateral */
+[data-testid="stSidebarNav"] {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+/* Reducir padding del contenido de la sidebar */
+[data-testid="stSidebar"]>div:first-child {
+    padding-top: 1rem !important;
+}
+
+/* Títulos del sidebar con Outfit */
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h1,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 {
+    font-family: 'Outfit', sans-serif !important;
+    color: var(--text) !important;
+    font-weight: 600 !important;
+}
+
+/* === 4.1 OPTION MENU GLASSMORPHISM STYLES === */
+/* Contenedor principal del menú */
+.nav-link {
+    font-family: 'Outfit', sans-serif !important;
+    border-radius: var(--radius) !important;
+    margin-bottom: 8px !important;
+    padding: 12px 16px !important;
+    transition: all 0.3s ease !important;
+    color: #6b7280 !important;
+    background: transparent !important;
+    border: none !important;
+    font-size: 14px !important;
+    text-align: left !important;
+}
+
+/* Iconos dentro del menu */
+.nav-link-icon {
+    transition: transform 0.3s ease, color 0.3s ease !important;
+    font-size: 18px !important;
+}
+
+/* Efecto HOVER (La magia del diseño glassmorphism) */
+.nav-link:hover {
+    background-color: white !important;
+    color: var(--accent) !important;
+    transform: translateX(5px) !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15) !important;
+}
+
+.nav-link:hover .nav-link-icon {
+    transform: scale(1.1) !important;
+    color: var(--accent) !important;
+}
+
+/* Item SELECCIONADO (Active State) */
+.nav-link-selected {
+    background-color: var(--accent) !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
+    font-weight: 600 !important;
+}
+
+.nav-link-selected:hover {
+    background-color: var(--accent) !important;
+    color: white !important;
+    transform: translateX(5px) !important;
+}
+
+.nav-link-selected .nav-link-icon {
+    color: white !important;
+}
+
+/* Contenedor del menú */
+.css-1544g2n {
+    padding: 0 !important;
+    background-color: transparent !important;
+}
+
+/* === 5. BOTONES MODERNOS === */
+/* Botones principales */
+div.stButton>button {
+    background: linear-gradient(135deg, var(--medical-blue) 0%, #3498DB 100%) !important;
+    color: var(--clinical-white) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 0.65rem 1.8rem !important;
+    font-weight: 500 !important;
+    font-size: 0.95rem !important;
+    letter-spacing: 0.3px !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 2px 8px rgba(46, 134, 193, 0.25) !important;
+}
+
+div.stButton>button:hover {
+    background: linear-gradient(135deg, var(--medical-blue-hover) 0%, var(--medical-blue) 100%) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(46, 134, 193, 0.35) !important;
+}
+
+div.stButton>button:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 1px 4px rgba(46, 134, 193, 0.3) !important;
+}
+
+/* Botones secundarios (Download, etc) */
+div.stDownloadButton>button {
+    background: var(--clinical-white) !important;
+    color: var(--medical-blue) !important;
+    border: 1.5px solid var(--medical-blue) !important;
+    border-radius: 8px !important;
+    padding: 0.6rem 1.5rem !important;
+    font-weight: 500 !important;
+    transition: all 0.25s ease !important;
+}
+
+div.stDownloadButton>button:hover {
+    background: var(--medical-blue) !important;
+    color: var(--clinical-white) !important;
+    box-shadow: 0 2px 8px rgba(46, 134, 193, 0.2) !important;
+}
+
+/* === 6. SISTEMA DE TARJETAS (CARDS) === */
+/* Contenedores de métricas */
+[data-testid="stMetric"] {
+    background: var(--clinical-white) !important;
+    padding: 1.5rem !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 8px rgba(44, 62, 80, 0.08) !important;
+    border: 1px solid rgba(46, 134, 193, 0.12) !important;
+    transition: all 0.3s ease !important;
+}
+
+[data-testid="stMetric"]:hover {
+    box-shadow: 0 4px 16px rgba(46, 134, 193, 0.15) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Contenedores generales */
+div[data-testid="stVerticalBlock"]>div {
+    background: var(--clinical-white) !important;
+    border-radius: 10px !important;
+}
+
+/* Expanders como tarjetas */
+div[data-testid="stExpander"] {
+    background: var(--clinical-white) !important;
+    border: 1px solid #E5E9F0 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04) !important;
+    margin-bottom: 1rem !important;
+}
+
+div[data-testid="stExpander"] summary {
+    background: linear-gradient(90deg, #F8FAFB 0%, var(--clinical-white) 100%) !important;
+    border-radius: 10px !important;
+    padding: 1rem 1.2rem !important;
+    font-weight: 500 !important;
+    color: var(--dark-gray) !important;
+}
+
+/* === 7. INPUTS Y SELECTORES === */
+/* Select boxes */
+div[data-baseweb="select"]>div {
+    background: var(--clinical-white) !important;
+    border-radius: 8px !important;
+    border: 1.5px solid #E5E9F0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.2s ease !important;
+}
+
+div[data-baseweb="select"]>div:hover {
+    border-color: var(--medical-blue) !important;
+    box-shadow: 0 2px 6px rgba(46, 134, 193, 0.12) !important;
+}
+
+div[data-baseweb="select"]>div:focus-within {
+    border-color: var(--medical-blue) !important;
+    box-shadow: 0 0 0 3px rgba(46, 134, 193, 0.1) !important;
+}
+
+/* Text inputs */
+.stTextInput input,
+.stNumberInput input {
+    background: var(--clinical-white) !important;
+    border-radius: 8px !important;
+    border: 1.5px solid #E5E9F0 !important;
+    color: var(--dark-gray) !important;
+    padding: 0.65rem 1rem !important;
+    transition: all 0.2s ease !important;
+}
+
+.stTextInput input:focus,
+.stNumberInput input:focus {
+    border-color: var(--medical-blue) !important;
+    box-shadow: 0 0 0 3px rgba(46, 134, 193, 0.1) !important;
+}
+
+/* Text areas */
+.stTextArea textarea {
+    background: var(--clinical-white) !important;
+    border-radius: 8px !important;
+    border: 1.5px solid #E5E9F0 !important;
+    color: var(--dark-gray) !important;
+    transition: all 0.2s ease !important;
+}
+
+.stTextArea textarea:focus {
+    border-color: var(--medical-blue) !important;
+    box-shadow: 0 0 0 3px rgba(46, 134, 193, 0.1) !important;
+}
+
+/* Sliders */
+div[data-baseweb="slider"]>div>div {
+    background: var(--medical-blue) !important;
+}
+
+/* === 8. TABLAS MODERNAS === */
+/* DataFrames */
+[data-testid="stDataFrame"] {
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+    border: 1px solid #E5E9F0 !important;
+}
+
+[data-testid="stDataFrame"] table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+}
+
+[data-testid="stDataFrame"] thead tr th {
+    background: linear-gradient(180deg, var(--medical-blue) 0%, #2471A3 100%) !important;
+    color: var(--clinical-white) !important;
+    font-weight: 600 !important;
+    padding: 1rem !important;
+    border: none !important;
+}
+
+[data-testid="stDataFrame"] tbody tr:nth-child(even) {
+    background: #F8FAFB !important;
+}
+
+[data-testid="stDataFrame"] tbody tr:hover {
+    background: #E8F4F8 !important;
+    transition: all 0.2s ease !important;
+}
+
+/* === 9. TABS PROFESIONALES === */
+button[data-baseweb="tab"] {
+    color: var(--dark-gray) !important;
+    font-weight: 500 !important;
+    border-bottom: 2px solid transparent !important;
+    transition: all 0.2s ease !important;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: var(--medical-blue) !important;
+    border-bottom: 2px solid var(--medical-blue) !important;
+    font-weight: 600 !important;
+}
+
+button[data-baseweb="tab"]:hover {
+    color: var(--medical-blue) !important;
+    background: rgba(46, 134, 193, 0.05) !important;
+}
+
+/* === 10. ALERTAS Y NOTIFICACIONES === */
+[data-testid="stAlert"] {
+    border-radius: 8px !important;
+    border: none !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Success */
+[data-testid="stAlert"][data-baseweb="notification"][kind="success"] {
+    background: linear-gradient(135deg, #D5F4E6 0%, #FFFFFF 100%) !important;
+    border-left: 4px solid #27AE60 !important;
+}
+
+/* Info */
+[data-testid="stAlert"][data-baseweb="notification"][kind="info"] {
+    background: linear-gradient(135deg, #D6EAF8 0%, #FFFFFF 100%) !important;
+    border-left: 4px solid var(--medical-blue) !important;
+}
+
+/* Warning */
+[data-testid="stAlert"][data-baseweb="notification"][kind="warning"] {
+    background: linear-gradient(135deg, #FCF3CF 0%, #FFFFFF 100%) !important;
+    border-left: 4px solid #F39C12 !important;
+}
+
+/* Error */
+[data-testid="stAlert"][data-baseweb="notification"][kind="error"] {
+    background: linear-gradient(135deg, #FADBD8 0%, #FFFFFF 100%) !important;
+    border-left: 4px solid #E74C3C !important;
+}
+
+/* === 11. TÍTULOS Y TIPOGRAFÍA === */
+h1 {
+    color: var(--dark-gray) !important;
+    font-weight: 700 !important;
+    font-size: 2.2rem !important;
+    letter-spacing: -0.5px !important;
+    margin-bottom: 1.5rem !important;
+}
+
+h2 {
+    color: var(--dark-gray) !important;
+    font-weight: 600 !important;
+    font-size: 1.75rem !important;
+    margin-bottom: 1.2rem !important;
+}
+
+h3 {
+    color: var(--medical-blue) !important;
+    font-weight: 600 !important;
+    font-size: 1.35rem !important;
+    margin-bottom: 1rem !important;
+}
+
+p,
+li,
+label {
+    color: var(--dark-gray) !important;
+    line-height: 1.6 !important;
+}
+
+/* === 12. GRÁFICAS DE PLOTLY === */
+.js-plotly-plot {
+    border-radius: 10px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* === 13. FILE UPLOADER === */
+[data-testid="stFileUploader"] {
+    background: var(--clinical-white) !important;
+    border: 2px dashed #E5E9F0 !important;
+    border-radius: 10px !important;
+    padding: 2rem !important;
+    transition: all 0.3s ease !important;
+}
+
+[data-testid="stFileUploader"]:hover {
+    border-color: var(--medical-blue) !important;
+    background: #F8FAFB !important;
+}
+
+/* === 14. SPINNER DE CARGA === */
+.stSpinner>div {
+    border-top-color: var(--medical-blue) !important;
+}
+
+/* === 15. CHECKBOX Y RADIO === */
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--medical-blue) !important;
+}
+
+/* === 16. SCROLLBAR PERSONALIZADA === */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #F5F7FA;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--medical-blue);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--medical-blue-hover);
+}
+
+/* === 17. OCULTAR ELEMENTOS STREAMLIT === */
+#MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+/* Asegurar que el botón de toggle sidebar sea visible */
+[data-testid="collapsedControl"] {
+    display: block !important;
+    visibility: visible !important;
+    z-index: 1000000 !important;
+    color: var(--medical-blue) !important;
+}
+
+header {
+    background: transparent !important;
+}
+
+/* === 18. ANIMACIONES SUAVES === */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+[data-testid="stVerticalBlock"]>div {
+    animation: fadeIn 0.4s ease-out;
+}
+
+/* === 19. CARDS PERSONALIZADAS (para uso con st.markdown) === */
+.medical-card {
+    background: var(--clinical-white);
+    padding: 1.8rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(44, 62, 80, 0.08);
+    border-left: 4px solid var(--medical-blue);
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.medical-card:hover {
+    box-shadow: 0 4px 16px rgba(46, 134, 193, 0.15);
+    transform: translateX(2px);
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFB 100%);
+    padding: 1.5rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #E5E9F0;
+    text-align: center;
+}
+
+/* === 20. RESPONSIVE === */
+@media (max-width: 768px) {
+    h1 {
+        font-size: 1.75rem !important;
+    }
+
+    h2 {
+        font-size: 1.4rem !important;
+    }
+
+    div.stButton>button {
+        padding: 0.55rem 1.2rem !important;
+        font-size: 0.9rem !important;
+    }
+}
+
+/* === 21. LANDING PAGE (HERO & SECTIONS) === */
+.hero-container {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: linear-gradient(180deg, rgba(46, 134, 193, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
+    border-radius: 0 0 20px 20px;
+    margin-bottom: 3rem;
+}
+
+.hero-title {
+    font-size: 3.5rem;
+    font-weight: 800;
+    color: var(--dark-gray);
+    margin-bottom: 1rem;
+    letter-spacing: -1px;
+}
+
+.hero-subtitle {
+    font-size: 1.25rem;
+    color: #5D6D7E;
+    max-width: 700px;
+    margin: 0 auto 2rem auto;
+    line-height: 1.6;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    margin-bottom: 4rem;
+}
+
+.feature-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    text-align: center;
+    transition: transform 0.3s ease, border-color 0.3s ease;
+    border: 1px solid #F0F3F4;
+}
+
+.feature-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--medical-blue);
+}
+
+.feature-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.feature-title {
+    font-weight: 700;
+    color: var(--dark-gray);
+    margin-bottom: 0.5rem;
+    font-size: 1.2rem;
+}
+
+.feature-description {
+    color: #5D6D7E;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.comparison-box {
+    background: #F8F9F9;
+    border-radius: 16px;
+    padding: 3rem;
+    margin-bottom: 4rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.comparison-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--dark-gray);
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.comparison-subtitle {
+    font-size: 1.1rem;
+    color: #5D6D7E;
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.steps-container {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    text-align: center;
+    margin-top: 2rem;
+    width: 100%;
+}
+
+.step-item {
+    flex: 1;
+    min-width: 200px;
+    padding: 1rem;
+}
+
+.step-number {
+    background: var(--medical-blue);
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem auto;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.step-title {
+    font-weight: 600;
+    color: var(--dark-gray);
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.step-description {
+    color: #5D6D7E;
+    font-size: 0.9rem;
+}
+
+/* Responsive para landing page */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2.5rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1.1rem;
+    }
+
+    .feature-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    .comparison-box {
+        padding: 2rem 1.5rem;
+    }
+
+    .steps-container {
+        flex-direction: column;
+    }
+}

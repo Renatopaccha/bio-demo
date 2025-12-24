@@ -1,0 +1,4 @@
+# file: /Users/preciosdeliquidacion/Documents/bio demo/modules/data_normalization.py
+# hypothesis_version: 6.148.7
+
+[0.0, 0.05, 0.5, 1.0, 100, '%Y-%m-%d %H:%M:%S', '-?\\d+\\.?\\d*', '1', '1.0.0', '2025-12-04', 'NA', 'OK', '_', '__safety_level__', '__status__', '__version__', 'diferencia', 'es_significativo', 'extraer_fila_tukey', 'grupo1', 'grupo2', 'ic_inferior', 'ic_superior', 'normalizar_bool', 'normalizar_grupo', 'normalizar_par_tukey', 'numpy', 'pandas', 'pvalue_ajustado', 'si', 'sí', 'true', 'validacion', 'yes']
