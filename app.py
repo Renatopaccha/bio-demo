@@ -57,26 +57,37 @@ def ejecutar_modulo(modulo):
 # --- IMPORTADOR ROBUSTO ---
 def safe_import(module_name_stats, module_name_root=None):
     """
-    Intenta importar módulos y MUESTRA EL ERROR si falla.
+    Intenta importar módulos desde múltiples ubicaciones (robustez para Cloud).
+    Orden: modules.stats → modules → raíz del proyecto
     """
-    # 1. Intentar en modules.stats
-    try:
-        return importlib.import_module(f"modules.stats.{module_name_stats}")
-    except ImportError as e:
-        # Si el error NO es que falta el módulo, es un error de código dentro del módulo (CRÍTICO)
-        if "No module named" not in str(e):
-            st.error(f"🚨 Error de Código en 'modules.stats.{module_name_stats}': {e}")
-    
-    # 2. Si falló, intentar en modules (raíz)
+    candidates = []
+
+    # 1. Construir lista de candidatos
+    candidates.append(f"modules.stats.{module_name_stats}")
+
     if module_name_root:
+        candidates.append(f"modules.{module_name_root}")
+        candidates.append(module_name_root)  # Fallback a raíz
+    else:
+        candidates.append(module_name_stats)  # Si no hay root, probar stats en raíz
+
+    # 2. Intentar importar en orden
+    for path in candidates:
         try:
-            return importlib.import_module(f"modules.{module_name_root}")
+            return importlib.import_module(path)
         except ImportError as e:
-            # Mostrar error específico para ayudar a depurar
-            print(f"⚠️ Aviso: No se pudo cargar '{module_name_root}': {e}")
-            # Descomenta la siguiente línea si quieres verlo en la interfaz:
-            # st.warning(f"No se cargó el módulo '{module_name_root}': {e}")
-            
+            # Si el error NO es "No module named", es un error de código (CRÍTICO)
+            if "No module named" not in str(e):
+                st.error(f"🚨 Error de Código en '{path}': {e}")
+                return None
+            # Si es "No module named", continuar probando otros candidatos
+            continue
+        except Exception as e:
+            # Otro tipo de error (sintaxis, etc.)
+            st.error(f"🚨 Error cargando '{path}': {e}")
+            return None
+
+    # 3. Si ninguno funcionó, retornar None
     return None
 
 # --- CARGA DE MÓDULOS ---

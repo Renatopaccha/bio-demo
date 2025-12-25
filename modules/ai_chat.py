@@ -2,7 +2,17 @@ import os
 import streamlit as st
 import google.generativeai as genai
 
-from modules.ai_logic import generar_resumen_tecnico, configurar_gemini
+# Import robusto con fallback para diferentes estructuras de proyecto
+try:
+    from modules.ai_logic import generar_resumen_tecnico, configurar_gemini
+except ImportError:
+    try:
+        from ai_logic import generar_resumen_tecnico, configurar_gemini
+    except ImportError as e:
+        # Si falla todo, mostrar error claro
+        import streamlit as st
+        st.error(f"❌ No se pudo importar ai_logic.py: {e}")
+        st.stop()
 
 # ==========================================
 # CONFIGURACIÓN DE API KEY (Prioridades):
