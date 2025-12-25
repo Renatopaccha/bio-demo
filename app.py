@@ -57,37 +57,41 @@ def ejecutar_modulo(modulo):
 # --- IMPORTADOR ROBUSTO ---
 def safe_import(module_name_stats, module_name_root=None):
     """
-    Intenta importar módulos desde múltiples ubicaciones (robustez para Cloud).
-    Orden: modules.stats → modules → raíz del proyecto
+    Import robusto:
+    1) modules.stats.<name>
+    2) modules.<name>
+    3) <name> (raíz del proyecto)
     """
-    candidates = []
+    # 1) Intentar en modules.stats
+    try:
+        return importlib.import_module(f"modules.stats.{module_name_stats}")
+    except ImportError as e:
+        if "No module named" not in str(e):
+            st.error(f"🚨 Error de Código en 'modules.stats.{module_name_stats}': {e}")
 
-    # 1. Construir lista de candidatos
-    candidates.append(f"modules.stats.{module_name_stats}")
-
+    # 2) Intentar en modules (raíz del paquete)
     if module_name_root:
-        candidates.append(f"modules.{module_name_root}")
-        candidates.append(module_name_root)  # Fallback a raíz
-    else:
-        candidates.append(module_name_stats)  # Si no hay root, probar stats en raíz
-
-    # 2. Intentar importar en orden
-    for path in candidates:
         try:
-            return importlib.import_module(path)
+            return importlib.import_module(f"modules.{module_name_root}")
         except ImportError as e:
-            # Si el error NO es "No module named", es un error de código (CRÍTICO)
             if "No module named" not in str(e):
-                st.error(f"🚨 Error de Código en '{path}': {e}")
-                return None
-            # Si es "No module named", continuar probando otros candidatos
-            continue
-        except Exception as e:
-            # Otro tipo de error (sintaxis, etc.)
-            st.error(f"🚨 Error cargando '{path}': {e}")
-            return None
+                st.error(f"🚨 Error de Código en 'modules.{module_name_root}': {e}")
 
-    # 3. Si ninguno funcionó, retornar None
+        # 3) Intentar en la raíz del proyecto (import directo)
+        try:
+            return importlib.import_module(module_name_root)
+        except ImportError as e:
+            # Si el fallo es por dependencia faltante, lo mostramos
+            if "No module named" not in str(e):
+                st.error(f"🚨 Error de Código al importar '{module_name_root}' (raíz): {e}")
+    else:
+        # fallback si solo se pasó module_name_stats
+        try:
+            return importlib.import_module(module_name_stats)
+        except ImportError as e:
+            if "No module named" not in str(e):
+                st.error(f"🚨 Error de Código al importar '{module_name_stats}' (raíz): {e}")
+
     return None
 
 # --- CARGA DE MÓDULOS ---
