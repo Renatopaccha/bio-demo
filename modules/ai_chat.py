@@ -1,14 +1,125 @@
+import os
 import streamlit as st
 import google.generativeai as genai
-from modules.ai_logic import generar_resumen_tecnico
+
+from modules.ai_logic import generar_resumen_tecnico, configurar_gemini
+
+
+def _get_gemini_key() -> str | None:
+    # 1) session_state
+    key = st.session_state.get("gemini_api_key")
+    if key:
+        return key
+
+    # 2) secrets
+    try:
+        key = st.secrets.get("GEMINI_API_KEY")
+        if key:
+            return key
+    except Exception:
+        pass
+
+    # 3) env vars
+    return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+
+def _get_or_create_model():
+    # Cache del modelo en session_state
+    if "gemini_model" in st.session_state and st.session_state["gemini_model"] is not None:
+        return st.session_state["gemini_model"]
+
+    api_key = _get_gemini_key()
+    if not api_key:
+        return None
+
+    model = configurar_gemini(api_key)
+    st.session_state["gemini_model"] = model
+    return model
+
+
+def render_ia_sidebar():
+    """Chat mini persistente en la barra lateral (no rompe la UI principal)."""
+    with st.sidebar:
+        st.markdown("### 🤖 Asistente IA")
+        st.caption("Bioestadística aplicada (salud). Respuestas didácticas y académicas.")
+
+        # API Key UI
+        api_key = _get_gemini_key()
+        if not api_key:
+            st.warning("🔒 Ingresa tu API Key de Gemini para activar el asistente.")
+            k = st.text_input("Gemini API Key", type="password", key="gemini_api_key_input")
+            if k:
+                st.session_state["gemini_api_key"] = k
+                st.session_state.pop("gemini_model", None)
+                st.rerun()
+            return
+
+        # Model
+        model = _get_or_create_model()
+        if model is None:
+            st.error("No se pudo inicializar Gemini. Verifica tu API Key o el acceso a modelos.")
+            if st.button("Reintentar", use_container_width=True):
+                st.session_state.pop("gemini_model", None)
+                st.rerun()
+            return
+
+        # Estado chat
+        if "ai_sidebar_messages" not in st.session_state:
+            st.session_state["ai_sidebar_messages"] = []
+
+        colA, colB = st.columns([1, 1])
+        with colA:
+            if st.button("🧹 Limpiar chat", use_container_width=True):
+                st.session_state["ai_sidebar_messages"] = []
+                st.rerun()
+        with colB:
+            if st.button("🔄 Reiniciar IA", use_container_width=True):
+                st.session_state.pop("gemini_model", None)
+                st.rerun()
+
+        # Mostrar últimas interacciones (compacto)
+        for m in st.session_state["ai_sidebar_messages"][-6:]:
+            role = "🧑‍🎓" if m["role"] == "user" else "🤖"
+            st.markdown(f"**{role}** {m['content']}")
+
+        prompt = st.text_area("Pregunta", height=80, placeholder="Ej: ¿Qué prueba usar para comparar dos grupos?")
+        if st.button("Enviar", use_container_width=True) and prompt.strip():
+            # contexto técnico (sin datos sensibles)
+            df = st.session_state.get("df_principal")
+            contexto = "No hay dataset cargado actualmente."
+            if df is not None:
+                contexto = generar_resumen_tecnico(df)
+
+            system_prompt = f"""
+Eres un Asistente Senior en Bioestadística para investigación en salud.
+No inventes datos. Si falta información, pide lo mínimo necesario.
+Usa lenguaje claro (para estudiante) pero riguroso (para investigador).
+
+CONTEXTO DE DATOS (sin filas crudas):
+{contexto}
+"""
+            full_prompt = f"{system_prompt}\n\nPregunta del usuario: {prompt}"
+
+            st.session_state["ai_sidebar_messages"].append({"role": "user", "content": prompt})
+
+            try:
+                resp = model.generate_content(full_prompt)
+                txt = (resp.text or "").strip()
+                if not txt:
+                    txt = "No se recibió texto del modelo. Intenta nuevamente."
+                st.session_state["ai_sidebar_messages"].append({"role": "assistant", "content": txt})
+            except Exception as e:
+                st.session_state["ai_sidebar_messages"].append(
+                    {"role": "assistant", "content": f"Error al conectar con Gemini: {e}"}
+                )
+
+            st.rerun()
+
 
 def render_asistente_completo():
-    """
-    Renderiza la interfaz de chat con IA en página completa.
-    """
+    """Página completa de chat IA (la que ya usas en tu UI)."""
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    
-    # Encabezado con Créditos
+
     c1, c2 = st.columns([3, 1])
     with c1:
         st.header("🤖 Asistente de Investigación BioStat")
@@ -22,70 +133,57 @@ def render_asistente_completo():
             </div>
             """, unsafe_allow_html=True
         )
-    
-    # Configuración de API Key (Si no está en session_state)
-    if 'gemini_api_key' not in st.session_state or not st.session_state.gemini_api_key:
-        st.warning("🔒 Para comenzar, necesitamos configurar tu acceso.")
-        api_key = st.text_input("Ingresa tu Google Gemini API Key:", type="password")
-        if api_key:
-            st.session_state['gemini_api_key'] = api_key
-            st.success("¡Conectado! Ya puedes chatear.")
+
+    model = _get_or_create_model()
+    if model is None:
+        st.warning("🔒 Para usar el asistente, ingresa tu API Key de Gemini aquí:")
+        k = st.text_input("Gemini API Key", type="password", key="gemini_api_key_page")
+
+        if k:
+            st.session_state["gemini_api_key"] = k
+            st.session_state.pop("gemini_model", None)  # forzar recreación del modelo
             st.rerun()
+
         st.markdown('</div>', unsafe_allow_html=True)
         return
 
-    # Contenedor de Chat
-    st.markdown("---")
-    
-    # Inicializar historial
+    # mensajes
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Mostrar historial
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    st.markdown("---")
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
 
-    # Input de Usuario
-    if prompt := st.chat_input("Escribe tu consulta aquí (ej: ¿Qué prueba uso para comparar estos grupos?)..."):
-        # 1. Mostrar mensaje usuario
+    prompt = st.chat_input("Escribe tu pregunta...")
+    if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # 2. Generar Contexto
+        df = st.session_state.get("df_principal")
         contexto_datos = "No hay un dataset cargado actualmente."
-        if st.session_state.df_principal is not None:
-            contexto_datos = generar_resumen_tecnico(st.session_state.df_principal)
+        if df is not None:
+            contexto_datos = generar_resumen_tecnico(df)
 
-        # 3. Llamada a la IA
+        system_prompt = f"""
+Eres un Asistente Senior en Bioestadística para Tesis Médicas y salud pública.
+No inventes datos ni números. Si falta información, dilo y sugiere qué falta.
+Primero clínico, luego estadístico. Explica para estudiante e investigador.
+
+CONTEXTO (sin datos sensibles):
+{contexto_datos}
+"""
+        full_prompt = f"{system_prompt}\n\nPregunta del usuario: {prompt}"
+
         try:
-            genai.configure(api_key=st.session_state['gemini_api_key'])
-            # Usar la versión 'latest' para asegurar compatibilidad
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            
-            system_prompt = f"""
-            Eres un Asistente Senior en Bioestadística para Tesis Médicas.
-            
-            DATOS DEL USUARIO (CONTEXTO REAL):
-            {contexto_datos}
-            
-            INSTRUCCIONES:
-            - Responde de forma didáctica, empática y rigurosa.
-            - Basa tus sugerencias en las variables disponibles en el CONTEXTO.
-            - Si el usuario pregunta "qué prueba usar", analiza los tipos de variables (numérica vs categórica).
-            - Usa formato Markdown para tablas o negritas.
-            """
-            
-            full_prompt = f"{system_prompt}\n\nPregunta del usuario: {prompt}"
-            
             with st.chat_message("assistant"):
-                with st.spinner("Analizando tus datos y metodología..."):
+                with st.spinner("Analizando..."):
                     response = model.generate_content(full_prompt)
-                    st.markdown(response.text)
-                    
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
-            
+                    txt = (response.text or "").strip()
+                    st.markdown(txt)
+            st.session_state.messages.append({"role": "assistant", "content": txt})
         except Exception as e:
             st.error(f"Error de conexión con Gemini: {e}")
 

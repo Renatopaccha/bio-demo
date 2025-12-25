@@ -226,10 +226,11 @@ def main():
         )
 
         st.divider()
-        
+
         # Chat Sidebar Persistente (Si existe el módulo)
-        if mod_ai_chat and hasattr(mod_ai_chat, 'render_ia_sidebar'):
-            mod_ai_chat.render_ia_sidebar()
+        # DESHABILITADO: El asistente IA solo se muestra en su página dedicada
+        # if mod_ai_chat and hasattr(mod_ai_chat, 'render_ia_sidebar'):
+        #     mod_ai_chat.render_ia_sidebar()
 
     # --- ENRUTADOR ---
     
@@ -245,8 +246,11 @@ def main():
     
     # 2. Módulos que NO requieren Datos cargados
     elif st.session_state['menu_option'] == "Asistente IA":
-        st.title("Asistente Inteligente")
-        st.info("Usa la barra lateral para chatear con Gemini sobre tus datos.")
+        if mod_ai_chat and hasattr(mod_ai_chat, "render_asistente_completo"):
+            mod_ai_chat.render_asistente_completo()
+        else:
+            st.error("No se encontró el módulo de IA o falta render_asistente_completo() en ai_chat.py.")
+        return
         
     elif st.session_state['menu_option'] == "Limpieza de Datos":
         ejecutar_modulo(mod_limpieza)
