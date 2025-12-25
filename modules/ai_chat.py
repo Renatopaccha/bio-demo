@@ -4,14 +4,19 @@ import google.generativeai as genai
 
 from modules.ai_logic import generar_resumen_tecnico, configurar_gemini
 
+# ==========================================
+# CONFIGURACIÓN DE API KEY (Prioridades):
+# ==========================================
+# 1. Streamlit Secrets (RECOMENDADO para producción)
+#    - Cloud: Settings → Secrets en Streamlit Community Cloud
+#    - Local: .streamlit/secrets.toml (NO subir a GitHub - agregar a .gitignore)
+# 2. Session State (fallback manual del usuario)
+# 3. Variables de entorno (GEMINI_API_KEY / GOOGLE_API_KEY)
+# ==========================================
+
 
 def _get_gemini_key() -> str | None:
-    # 1) session_state
-    key = st.session_state.get("gemini_api_key")
-    if key:
-        return key
-
-    # 2) secrets
+    # 1) Streamlit Secrets (PROD en Community Cloud)
     try:
         key = st.secrets.get("GEMINI_API_KEY")
         if key:
@@ -19,7 +24,12 @@ def _get_gemini_key() -> str | None:
     except Exception:
         pass
 
-    # 3) env vars
+    # 2) Session state (fallback manual)
+    key = st.session_state.get("gemini_api_key")
+    if key:
+        return key
+
+    # 3) Env vars (otros hostings)
     return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 
@@ -46,8 +56,9 @@ def render_ia_sidebar():
         # API Key UI
         api_key = _get_gemini_key()
         if not api_key:
-            st.warning("🔒 Ingresa tu API Key de Gemini para activar el asistente.")
-            k = st.text_input("Gemini API Key", type="password", key="gemini_api_key_input")
+            st.warning("🔒 No se encontró GEMINI_API_KEY en Streamlit Secrets.")
+            st.info("Configura tu key en Settings → Secrets (Cloud) o .streamlit/secrets.toml (Local)")
+            k = st.text_input("API Key (fallback)", type="password", key="gemini_api_key_input")
             if k:
                 st.session_state["gemini_api_key"] = k
                 st.session_state.pop("gemini_model", None)
@@ -136,12 +147,13 @@ def render_asistente_completo():
 
     model = _get_or_create_model()
     if model is None:
-        st.warning("🔒 Para usar el asistente, ingresa tu API Key de Gemini aquí:")
-        k = st.text_input("Gemini API Key", type="password", key="gemini_api_key_page")
+        st.warning("🔒 No se encontró GEMINI_API_KEY en Streamlit Secrets (Settings → Secrets).")
 
+        # Solo fallback manual si realmente no hay ninguna key disponible
+        k = st.text_input("Gemini API Key (solo si no tienes Secrets)", type="password", key="gemini_api_key_page")
         if k:
             st.session_state["gemini_api_key"] = k
-            st.session_state.pop("gemini_model", None)  # forzar recreación del modelo
+            st.session_state.pop("gemini_model", None)
             st.rerun()
 
         st.markdown('</div>', unsafe_allow_html=True)
