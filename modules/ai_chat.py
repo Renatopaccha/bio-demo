@@ -1,6 +1,8 @@
 import os
 import streamlit as st
 import google.generativeai as genai
+from datetime import datetime
+import uuid
 
 # Import robusto con fallback para diferentes estructuras de proyecto
 try:
@@ -55,6 +57,65 @@ def _get_or_create_model():
     model = configurar_gemini(api_key)
     st.session_state["gemini_model"] = model
     return model
+
+
+# ==========================================
+# SISTEMA MULTI-CHAT (helpers)
+# ==========================================
+
+def _now_str():
+    return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+def _init_chat_state():
+    if "ai_conversations" not in st.session_state:
+        st.session_state["ai_conversations"] = {}
+
+    if "ai_active_chat_id" not in st.session_state or st.session_state["ai_active_chat_id"] not in st.session_state["ai_conversations"]:
+        # Crear chat inicial
+        _new_chat(set_active=True)
+
+
+def _new_chat(set_active: bool = True):
+    chat_id = uuid.uuid4().hex[:10]
+    st.session_state["ai_conversations"][chat_id] = {
+        "title": "Nuevo chat",
+        "messages": [],
+        "created_at": _now_str(),
+        "updated_at": _now_str(),
+    }
+    if set_active:
+        st.session_state["ai_active_chat_id"] = chat_id
+    return chat_id
+
+
+def _delete_chat(chat_id: str):
+    convos = st.session_state.get("ai_conversations", {})
+    if chat_id in convos:
+        del convos[chat_id]
+
+    # Si borraste el activo, elegir otro o crear uno nuevo
+    if st.session_state.get("ai_active_chat_id") == chat_id:
+        remaining = list(convos.keys())
+        if remaining:
+            st.session_state["ai_active_chat_id"] = remaining[0]
+        else:
+            _new_chat(set_active=True)
+
+
+def _get_active_chat():
+    _init_chat_state()
+    active_id = st.session_state["ai_active_chat_id"]
+    return active_id, st.session_state["ai_conversations"][active_id]
+
+
+def _auto_title_from_prompt(prompt: str) -> str:
+    # 6-8 palabras como título, estilo ChatGPT
+    words = (prompt or "").strip().split()
+    title = " ".join(words[:8]).strip()
+    if len(words) > 8:
+        title += "…"
+    return title or "Nuevo chat"
 
 
 def render_ia_sidebar():
@@ -138,75 +199,166 @@ CONTEXTO DE DATOS (sin filas crudas):
 
 
 def render_asistente_completo():
-    """Página completa de chat IA (la que ya usas en tu UI)."""
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+    """Página completa multi-chat estilo ChatGPT/Gemini."""
+    _init_chat_state()
 
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        st.header("🤖 Asistente de Investigación BioStat")
-        st.caption("Tu experto metodológico personal. Pregunta sobre tus datos o estadística.")
-    with c2:
-        st.markdown(
-            """
-            <div style="text-align: right; opacity: 0.7;">
-                <small>Powered by</small><br>
-                <img src="https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg" width="80">
-            </div>
-            """, unsafe_allow_html=True
-        )
-
+    # --- Modelo ---
     model = _get_or_create_model()
     if model is None:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.header("🤖 Asistente de Investigación BioStat")
         st.warning("🔒 No se encontró GEMINI_API_KEY en Streamlit Secrets (Settings → Secrets).")
-
-        # Solo fallback manual si realmente no hay ninguna key disponible
-        k = st.text_input("Gemini API Key (solo si no tienes Secrets)", type="password", key="gemini_api_key_page")
-        if k:
-            st.session_state["gemini_api_key"] = k
-            st.session_state.pop("gemini_model", None)
-            st.rerun()
-
+        st.info("Agrega en Secrets: GEMINI_API_KEY = \"TU_KEY\"")
         st.markdown('</div>', unsafe_allow_html=True)
         return
 
-    # mensajes
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    # --- Layout principal: historial (izq) + chat (der) ---
+    left, right = st.columns([1, 3], gap="large")
 
-    st.markdown("---")
-    for m in st.session_state.messages:
-        with st.chat_message(m["role"]):
-            st.markdown(m["content"])
+    # =========================
+    # PANEL IZQUIERDO: CHATS
+    # =========================
+    with left:
+        st.markdown("### 💬 Chats")
+        if st.button("➕ Nuevo chat", key="ai_new_chat_btn", use_container_width=True):
+            _new_chat(set_active=True)
+            st.rerun()
 
-    prompt = st.chat_input("Escribe tu pregunta...")
-    if prompt:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        st.write("")
 
-        df = st.session_state.get("df_principal")
-        contexto_datos = "No hay un dataset cargado actualmente."
-        if df is not None:
-            contexto_datos = generar_resumen_tecnico(df)
+        # Ordenar por updated_at (más reciente arriba)
+        convos = st.session_state["ai_conversations"]
+        def _sort_key(item):
+            cid, data = item
+            return data.get("updated_at", "")
+        ordered = sorted(convos.items(), key=_sort_key, reverse=True)
 
-        system_prompt = f"""
-Eres un Asistente Senior en Bioestadística para Tesis Médicas y salud pública.
+        active_id = st.session_state["ai_active_chat_id"]
+
+        popover_fn = getattr(st, "popover", None)
+
+        for cid, cdata in ordered:
+            is_active = (cid == active_id)
+            row = st.columns([0.82, 0.18], gap="small")
+
+            # Botón para abrir chat
+            with row[0]:
+                label = cdata.get("title", "Nuevo chat")
+                if st.button(
+                    label,
+                    key=f"open_chat_{cid}",
+                    type="primary" if is_active else "secondary",
+                    use_container_width=True
+                ):
+                    st.session_state["ai_active_chat_id"] = cid
+                    st.rerun()
+
+            # Menú "⋯" (popover si existe, si no expander)
+            with row[1]:
+                if popover_fn:
+                    with st.popover("⋯", use_container_width=True):
+                        st.caption(f"ID: {cid}")
+                        new_name = st.text_input("Renombrar", value=cdata.get("title", "Nuevo chat"), key=f"rename_{cid}")
+                        if st.button("Guardar nombre", key=f"save_name_{cid}", use_container_width=True):
+                            st.session_state["ai_conversations"][cid]["title"] = new_name.strip() or "Nuevo chat"
+                            st.session_state["ai_conversations"][cid]["updated_at"] = _now_str()
+                            st.rerun()
+
+                        st.divider()
+                        confirm = st.checkbox("Confirmar eliminación", key=f"confirm_del_{cid}")
+                        if st.button("🗑️ Eliminar chat", key=f"del_{cid}", disabled=not confirm, use_container_width=True):
+                            _delete_chat(cid)
+                            st.rerun()
+                else:
+                    # Fallback si tu Streamlit no soporta popover
+                    with st.expander("⋯", expanded=False):
+                        st.caption(f"ID: {cid}")
+                        new_name = st.text_input("Renombrar", value=cdata.get("title", "Nuevo chat"), key=f"rename_{cid}")
+                        if st.button("Guardar nombre", key=f"save_name_{cid}", use_container_width=True):
+                            st.session_state["ai_conversations"][cid]["title"] = new_name.strip() or "Nuevo chat"
+                            st.session_state["ai_conversations"][cid]["updated_at"] = _now_str()
+                            st.rerun()
+
+                        st.divider()
+                        confirm = st.checkbox("Confirmar eliminación", key=f"confirm_del_{cid}")
+                        if st.button("🗑️ Eliminar chat", key=f"del_{cid}", disabled=not confirm, use_container_width=True):
+                            _delete_chat(cid)
+                            st.rerun()
+
+    # =========================
+    # PANEL DERECHO: CHAT ACTIVO
+    # =========================
+    with right:
+        chat_id, chat = _get_active_chat()
+
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+
+        header_cols = st.columns([3, 1])
+        with header_cols[0]:
+            st.header("🤖 Asistente de Investigación BioStat")
+            st.caption("Tu experto metodológico personal. Multi-chat con historial.")
+        with header_cols[1]:
+            if st.button("🧹 Limpiar chat", key="clear_active_chat", use_container_width=True):
+                st.session_state["ai_conversations"][chat_id]["messages"] = []
+                st.session_state["ai_conversations"][chat_id]["updated_at"] = _now_str()
+                st.rerun()
+
+        st.markdown("---")
+
+        # Mostrar mensajes del chat activo
+        messages = chat.get("messages", [])
+        for m in messages:
+            with st.chat_message(m["role"]):
+                st.markdown(m["content"])
+
+        prompt = st.chat_input("Escribe tu pregunta…")
+        if prompt:
+            # Guardar mensaje usuario
+            messages.append({"role": "user", "content": prompt})
+            st.session_state["ai_conversations"][chat_id]["updated_at"] = _now_str()
+
+            # Auto título si es primer mensaje real
+            if st.session_state["ai_conversations"][chat_id]["title"] == "Nuevo chat":
+                st.session_state["ai_conversations"][chat_id]["title"] = _auto_title_from_prompt(prompt)
+
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            # Contexto dataset (sin datos sensibles)
+            df = st.session_state.get("df_principal")
+            contexto_datos = "No hay un dataset cargado actualmente."
+            if df is not None:
+                contexto_datos = generar_resumen_tecnico(df)
+
+            system_prompt = f"""
+Eres un Asistente Senior en Bioestadística para investigación en salud.
 No inventes datos ni números. Si falta información, dilo y sugiere qué falta.
-Primero clínico, luego estadístico. Explica para estudiante e investigador.
+Explica de forma entendible para estudiante e investigador (claro y académico).
 
 CONTEXTO (sin datos sensibles):
 {contexto_datos}
 """
-        full_prompt = f"{system_prompt}\n\nPregunta del usuario: {prompt}"
 
-        try:
-            with st.chat_message("assistant"):
-                with st.spinner("Analizando..."):
-                    response = model.generate_content(full_prompt)
-                    txt = (response.text or "").strip()
-                    st.markdown(txt)
-            st.session_state.messages.append({"role": "assistant", "content": txt})
-        except Exception as e:
-            st.error(f"Error de conexión con Gemini: {e}")
+            full_prompt = f"{system_prompt}\n\nPregunta del usuario: {prompt}"
 
-    st.markdown('</div>', unsafe_allow_html=True)
+            try:
+                with st.chat_message("assistant"):
+                    with st.spinner("Analizando..."):
+                        response = model.generate_content(full_prompt)
+                        txt = (response.text or "").strip()
+                        if not txt:
+                            txt = "No se recibió texto del modelo. Intenta nuevamente."
+                        st.markdown(txt)
+
+                messages.append({"role": "assistant", "content": txt})
+                st.session_state["ai_conversations"][chat_id]["messages"] = messages
+                st.session_state["ai_conversations"][chat_id]["updated_at"] = _now_str()
+
+            except Exception as e:
+                err = f"Error de conexión con Gemini: {e}"
+                messages.append({"role": "assistant", "content": err})
+                st.session_state["ai_conversations"][chat_id]["messages"] = messages
+                st.session_state["ai_conversations"][chat_id]["updated_at"] = _now_str()
+                st.error(err)
+
+        st.markdown('</div>', unsafe_allow_html=True)
