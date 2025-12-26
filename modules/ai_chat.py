@@ -6,10 +6,10 @@ import uuid
 
 # Import robusto con fallback para diferentes estructuras de proyecto
 try:
-    from modules.ai_logic import generar_resumen_tecnico, configurar_gemini
+    from modules.ai_logic import generar_resumen_tecnico, configurar_gemini, build_result_prompt
 except ImportError:
     try:
-        from ai_logic import generar_resumen_tecnico, configurar_gemini
+        from ai_logic import generar_resumen_tecnico, configurar_gemini, build_result_prompt
     except ImportError as e:
         # Si falla todo, mostrar error claro
         import streamlit as st
@@ -384,3 +384,98 @@ CONTEXTO (sin datos sensibles):
             st.rerun()
 
         st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ==========================================
+# COPILOTO CONECTADO A TABLAS
+# ==========================================
+
+def render_interpretar_tabla(df_resultado, titulo, notas=""):
+    """
+    Renderiza botón "Interpretar con IA" para tablas de resultados estadísticos.
+
+    Args:
+        df_resultado: DataFrame con la tabla de resultados
+        titulo: Título descriptivo de la tabla
+        notas: Notas adicionales sobre el análisis (opcional)
+    """
+    # Generar key única para esta tabla (basada en título)
+    tabla_key = f"ai_interpret_{hash(titulo)}"
+
+    # Verificar si hay API key configurada
+    api_key = _get_gemini_key()
+    if not api_key:
+        st.info("💡 Configura tu API Key de Gemini en Secrets para usar el Copiloto de IA")
+        return
+
+    # Botón para interpretar
+    if st.button("📌 Interpretar con IA", key=f"btn_{tabla_key}", use_container_width=True):
+        # Obtener dataset principal si existe
+        df_principal = st.session_state.get("df_principal")
+
+        # Construir prompt
+        prompt = build_result_prompt(df_resultado, titulo, notas, df_principal)
+
+        # Obtener modelo
+        model = _get_or_create_model()
+        if model is None:
+            st.error("❌ No se pudo inicializar el modelo de IA. Verifica tu API Key.")
+            return
+
+        # Generar interpretación
+        with st.spinner("🤖 Generando interpretación académica..."):
+            try:
+                response = model.generate_content(prompt)
+                interpretacion = (response.text or "").strip()
+
+                if not interpretacion:
+                    interpretacion = "⚠️ No se recibió respuesta del modelo. Intenta nuevamente."
+
+                # Guardar en session_state
+                st.session_state[tabla_key] = interpretacion
+
+            except Exception as e:
+                st.error(f"❌ Error al conectar con Gemini: {e}")
+                return
+
+    # Mostrar interpretación si existe
+    if tabla_key in st.session_state:
+        interpretacion = st.session_state[tabla_key]
+
+        # Usar dialog si existe (Streamlit >= 1.31), si no usar expander
+        dialog_fn = getattr(st, "dialog", None)
+
+        if dialog_fn:
+            # Modal dialog (más moderno)
+            @dialog_fn(f"🎓 Interpretación: {titulo}")
+            def mostrar_interpretacion():
+                st.markdown(interpretacion)
+
+                # Botón para copiar (muestra en code block para copiar manualmente)
+                st.divider()
+                st.caption("📋 Copia el texto desde aquí:")
+                st.code(interpretacion, language="markdown")
+
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    if st.button("✅ Cerrar", use_container_width=True):
+                        st.rerun()
+                with col2:
+                    if st.button("🗑️ Borrar interpretación", use_container_width=True):
+                        del st.session_state[tabla_key]
+                        st.rerun()
+
+            if st.button("📖 Ver interpretación", key=f"ver_{tabla_key}", use_container_width=True):
+                mostrar_interpretacion()
+        else:
+            # Expander (fallback para versiones antiguas)
+            with st.expander("📖 Ver Interpretación Académica", expanded=True):
+                st.markdown(interpretacion)
+
+                st.divider()
+                st.caption("📋 Copia el texto desde aquí:")
+                st.code(interpretacion, language="markdown")
+
+                if st.button("🗑️ Borrar interpretación", key=f"borrar_{tabla_key}"):
+                    del st.session_state[tabla_key]
+                    st.rerun()

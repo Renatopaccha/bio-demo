@@ -104,3 +104,102 @@ def generar_interpretacion_apa(texto_resultados, tipo_prueba, api_key):
         return response.text
     except Exception as e:
         return f"Error al conectar con la IA: {str(e)}"
+
+
+def build_result_prompt(df_resultado, titulo, notas="", df_principal=None):
+    """
+    Construye un prompt estructurado para interpretar tabla de resultados estadísticos.
+
+    Args:
+        df_resultado: DataFrame con la tabla de resultados a interpretar
+        titulo: Título descriptivo de la tabla
+        notas: Notas adicionales o contexto sobre el análisis
+        df_principal: Dataset principal (opcional) para contexto adicional
+
+    Returns:
+        str: Prompt listo para enviar a Gemini
+    """
+    # Convertir DataFrame a markdown (con límites de seguridad)
+    df_limitado = df_resultado.copy()
+
+    # Limitar filas y columnas para no sobrecargar el prompt
+    MAX_ROWS = 60
+    MAX_COLS = 12
+
+    if len(df_limitado) > MAX_ROWS:
+        df_limitado = df_limitado.head(MAX_ROWS)
+        truncado_filas = f"\n⚠️ Tabla truncada a {MAX_ROWS} filas (original: {len(df_resultado)} filas)"
+    else:
+        truncado_filas = ""
+
+    if len(df_limitado.columns) > MAX_COLS:
+        df_limitado = df_limitado.iloc[:, :MAX_COLS]
+        truncado_cols = f"\n⚠️ Tabla truncada a {MAX_COLS} columnas (original: {len(df_resultado.columns)} columnas)"
+    else:
+        truncado_cols = ""
+
+    # Convertir a markdown
+    tabla_md = df_limitado.to_markdown(index=True)
+    advertencias = truncado_filas + truncado_cols
+
+    # Contexto del dataset principal (si existe)
+    contexto_dataset = ""
+    if df_principal is not None:
+        contexto_dataset = f"""
+CONTEXTO DEL DATASET PRINCIPAL:
+{generar_resumen_tecnico(df_principal)}
+"""
+
+    # Construir prompt estructurado
+    prompt = f"""
+Eres un Bioestadístico Senior especializado en investigación en salud (medicina, enfermería, nutrición, salud pública).
+Tu objetivo es interpretar resultados estadísticos de forma académica y clínica para tesis de pregrado y posgrado.
+
+TABLA DE RESULTADOS: {titulo}
+{tabla_md}
+{advertencias}
+
+NOTAS ADICIONALES:
+{notas if notas else "No hay notas adicionales."}
+{contexto_dataset}
+
+INSTRUCCIONES CRÍTICAS:
+1. NO inventes números que no estén en la tabla.
+2. Si falta información clave, indícalo claramente ("No se dispone de X para...").
+3. Usa los valores exactos de la tabla.
+4. Enfoque dual: PRIMERO clínico (relevancia práctica), LUEGO estadístico (rigor metodológico).
+
+ESTRUCTURA DE TU RESPUESTA (obligatoria):
+
+## 📊 Resumen Ejecutivo
+(3 bullets con los hallazgos más importantes, concisos y claros)
+
+## 🏥 Interpretación Clínica
+(2-3 párrafos explicando QUÉ significan estos resultados para la práctica clínica/salud pública.
+Lenguaje accesible pero riguroso. Evita jerga innecesaria.
+Enfócate en implicaciones prácticas y relevancia para profesionales de la salud.)
+
+## 📈 Interpretación Estadística
+(2-3 párrafos sobre aspectos metodológicos:
+- ¿Se cumplen los supuestos?
+- ¿Qué indica el tamaño del efecto?
+- ¿Es significativa la asociación/diferencia?
+- ¿Cuál es la precisión de las estimaciones (IC 95%)?
+Usa terminología técnica correcta pero explícala.)
+
+## 📝 Redacción para Tesis (Sección Resultados)
+(1 párrafo en estilo APA 7ma edición, listo para copiar y pegar.
+Ejemplo: "Se encontró una diferencia estadísticamente significativa entre... (χ² = X.XX, p < .05).
+El análisis reveló que...")
+
+## ⚠️ Limitaciones y Recomendaciones
+(2-4 bullets sobre:
+- Limitaciones del análisis actual
+- Qué análisis complementarios podrían ser útiles
+- Aspectos a considerar en la interpretación
+- Recomendaciones para fortalecer el análisis)
+
+FORMATO: Usa Markdown. Sé académico pero entendible. Prioriza precisión sobre brevedad.
+"""
+
+    return prompt

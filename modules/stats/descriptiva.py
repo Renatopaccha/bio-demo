@@ -16,6 +16,17 @@ import scipy.stats as stats
 # Importamos la utilidad de guardado
 from modules.utils import boton_guardar_tabla, boton_guardar_grafico, card_container
 
+# Importar Copiloto IA para interpretación de tablas (con fallback robusto)
+try:
+    from modules.ai_chat import render_interpretar_tabla
+except ImportError:
+    try:
+        from ai_chat import render_interpretar_tabla
+    except ImportError:
+        # Si no está disponible, creamos función dummy
+        def render_interpretar_tabla(*args, **kwargs):
+            pass
+
 from modules.stats.core import (
     calculate_descriptive_stats,
     detect_outliers_advanced,
@@ -1220,7 +1231,14 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
         )
         
         boton_guardar_tabla(df_resumen, "Resumen_Descriptivo_Global", "btn_resumen_global", orientacion="Horizontal (como SPSS)")
-        
+
+        # Copiloto IA: Interpretación académica de la tabla
+        render_interpretar_tabla(
+            df_resultado=df_resumen,
+            titulo="Tabla 1: Resumen Descriptivo Global",
+            notas="Estadísticas descriptivas principales del dataset incluyendo medidas de tendencia central, dispersión e intervalos de confianza al 95%."
+        )
+
         mostrar_interpretacion_ui(
             generar_analisis_numerico_descriptivo(df_resumen, titulo="Interpretación del Resumen Descriptivo"),
             key="interp_univariado_resumen"
