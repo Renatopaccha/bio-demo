@@ -10,6 +10,7 @@ from pathlib import Path
 
 import streamlit as st
 from sqlalchemy import create_engine, Column, String, Integer, Text, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -55,35 +56,102 @@ class Message(Base):
 
 
 # ==========================================
-# CONEXIÓN A BD
+# CONEXIÓN A BD (ROBUSTA CON FALLBACK)
 # ==========================================
 
-def _get_db_engine():
-    """Retorna engine de SQLAlchemy (Postgres si existe DATABASE_URL, si no SQLite)."""
+def _sqlite_url():
+    """Retorna URL de SQLite local."""
+    Path("data").mkdir(exist_ok=True)
+    return "sqlite:///data/chats.db"
+
+
+def _get_database_url():
+    """Obtiene DATABASE_URL de secrets o env vars."""
     try:
-        db_url = st.secrets.get("DATABASE_URL")
-        if db_url:
-            # Postgres desde Streamlit Secrets
-            return create_engine(db_url, echo=False)
+        url = st.secrets.get("DATABASE_URL")
+        if url:
+            return url
     except Exception:
         pass
 
-    # Fallback: SQLite local
-    data_dir = Path("data")
-    data_dir.mkdir(exist_ok=True)
-    db_path = data_dir / "chats.db"
-    return create_engine(f"sqlite:///{db_path}", echo=False)
+    return os.getenv("DATABASE_URL")
+
+
+def _build_engine():
+    """
+    Construye engine de SQLAlchemy con configuración robusta.
+    - Postgres: con pool_pre_ping, pool_recycle, sslmode
+    - SQLite: con check_same_thread=False
+    """
+    db_url = _get_database_url()
+
+    # Si no hay DATABASE_URL, usar SQLite
+    if not db_url:
+        return create_engine(
+            _sqlite_url(),
+            connect_args={"check_same_thread": False},
+            echo=False
+        )
+
+    # Normalizar postgres:// a postgresql://
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+    # Connect args para Postgres
+    connect_args = {}
+    if "sslmode=" not in db_url and db_url.startswith("postgresql://"):
+        connect_args["sslmode"] = "require"
+
+    return create_engine(
+        db_url,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+        connect_args=connect_args,
+        echo=False
+    )
+
+
+def _get_cached_engine():
+    """Retorna el engine cacheado en session_state."""
+    if "_ai_engine" not in st.session_state:
+        st.session_state["_ai_engine"] = _build_engine()
+    return st.session_state["_ai_engine"]
 
 
 def init_db():
-    """Inicializa tablas si no existen."""
-    engine = _get_db_engine()
-    Base.metadata.create_all(engine)
+    """
+    Inicializa tablas en BD.
+    Si falla Postgres, hace fallback automático a SQLite local.
+    """
+    engine = _get_cached_engine()
+
+    try:
+        Base.metadata.create_all(engine)
+        # Detectar tipo de BD
+        db_mode = "postgres" if "postgresql://" in str(engine.url) else "sqlite"
+        st.session_state["_ai_db_mode"] = db_mode
+
+    except OperationalError as e:
+        # Fallback seguro a SQLite si Postgres falla
+        st.warning(
+            "⚠️ No se pudo conectar a PostgreSQL. Usando SQLite local como fallback.\n"
+            "Verifica DATABASE_URL en Secrets y que el servidor Postgres esté disponible."
+        )
+
+        # Crear nuevo engine con SQLite
+        engine = create_engine(
+            _sqlite_url(),
+            connect_args={"check_same_thread": False},
+            echo=False
+        )
+        st.session_state["_ai_engine"] = engine
+        Base.metadata.create_all(engine)
+        st.session_state["_ai_db_mode"] = "sqlite"
 
 
 def _get_session():
-    """Retorna sesión de SQLAlchemy."""
-    engine = _get_db_engine()
+    """Retorna sesión de SQLAlchemy usando el engine cacheado."""
+    engine = _get_cached_engine()
     Session = sessionmaker(bind=engine)
     return Session()
 
