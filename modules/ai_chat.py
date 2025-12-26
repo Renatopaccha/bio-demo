@@ -16,6 +16,38 @@ except ImportError:
         st.error(f"❌ No se pudo importar ai_logic.py: {e}")
         st.stop()
 
+# Import de persistencia (BD)
+try:
+    from modules.ai_store import (
+        get_user_id,
+        init_db,
+        list_chats,
+        create_chat,
+        rename_chat,
+        delete_chat as db_delete_chat,
+        load_messages,
+        append_message,
+        update_chat_activity,
+        clear_chat_messages,
+    )
+except ImportError:
+    try:
+        from ai_store import (
+            get_user_id,
+            init_db,
+            list_chats,
+            create_chat,
+            rename_chat,
+            delete_chat as db_delete_chat,
+            load_messages,
+            append_message,
+            update_chat_activity,
+            clear_chat_messages,
+        )
+    except ImportError as e:
+        st.error(f"❌ No se pudo importar ai_store.py: {e}")
+        st.stop()
+
 # ==========================================
 # CONFIGURACIÓN DE API KEY (Prioridades):
 # ==========================================
@@ -60,57 +92,44 @@ def _get_or_create_model():
 
 
 # ==========================================
-# SISTEMA MULTI-CHAT (helpers)
+# SISTEMA MULTI-CHAT CON PERSISTENCIA (helpers)
 # ==========================================
 
-def _now_str():
-    return datetime.now().strftime("%Y-%m-%d %H:%M")
+def _ensure_active_chat_exists(user_id: str):
+    """Asegura que existe al menos un chat y uno está activo."""
+    chats = list_chats(user_id)
 
-
-def _init_chat_state():
-    if "ai_conversations" not in st.session_state:
-        st.session_state["ai_conversations"] = {}
-
-    if "ai_active_chat_id" not in st.session_state or st.session_state["ai_active_chat_id"] not in st.session_state["ai_conversations"]:
-        # Crear chat inicial
-        _new_chat(set_active=True)
-
-
-def _new_chat(set_active: bool = True):
-    chat_id = uuid.uuid4().hex[:10]
-    st.session_state["ai_conversations"][chat_id] = {
-        "title": "Nuevo chat",
-        "messages": [],
-        "created_at": _now_str(),
-        "updated_at": _now_str(),
-    }
-    if set_active:
+    if not chats:
+        # Crear primer chat
+        chat_id = create_chat(user_id, "Nuevo chat")
         st.session_state["ai_active_chat_id"] = chat_id
-    return chat_id
+        return
+
+    # Si no hay chat activo o el activo no existe, seleccionar el más reciente
+    active_id = st.session_state.get("ai_active_chat_id")
+    chat_ids = [c["id"] for c in chats]
+
+    if not active_id or active_id not in chat_ids:
+        st.session_state["ai_active_chat_id"] = chats[0]["id"]
 
 
-def _delete_chat(chat_id: str):
-    convos = st.session_state.get("ai_conversations", {})
-    if chat_id in convos:
-        del convos[chat_id]
+def _handle_delete_chat(user_id: str, chat_id: str):
+    """Elimina un chat y ajusta el chat activo."""
+    db_delete_chat(chat_id)
 
-    # Si borraste el activo, elegir otro o crear uno nuevo
+    # Si era el activo, seleccionar otro
     if st.session_state.get("ai_active_chat_id") == chat_id:
-        remaining = list(convos.keys())
-        if remaining:
-            st.session_state["ai_active_chat_id"] = remaining[0]
+        chats = list_chats(user_id)
+        if chats:
+            st.session_state["ai_active_chat_id"] = chats[0]["id"]
         else:
-            _new_chat(set_active=True)
-
-
-def _get_active_chat():
-    _init_chat_state()
-    active_id = st.session_state["ai_active_chat_id"]
-    return active_id, st.session_state["ai_conversations"][active_id]
+            # Crear nuevo chat si no queda ninguno
+            new_chat_id = create_chat(user_id, "Nuevo chat")
+            st.session_state["ai_active_chat_id"] = new_chat_id
 
 
 def _auto_title_from_prompt(prompt: str) -> str:
-    # 6-8 palabras como título, estilo ChatGPT
+    """Genera título automático del chat basado en primeras palabras del prompt."""
     words = (prompt or "").strip().split()
     title = " ".join(words[:8]).strip()
     if len(words) > 8:
@@ -199,8 +218,15 @@ CONTEXTO DE DATOS (sin filas crudas):
 
 
 def render_asistente_completo():
-    """Página completa multi-chat estilo ChatGPT/Gemini."""
-    _init_chat_state()
+    """Página completa multi-chat estilo ChatGPT/Gemini con persistencia en BD."""
+    # Inicializar BD
+    init_db()
+
+    # Obtener ID de usuario (cookie o session_state)
+    user_id = get_user_id()
+
+    # Asegurar que existe al menos un chat
+    _ensure_active_chat_exists(user_id)
 
     # --- Modelo ---
     model = _get_or_create_model()
@@ -221,29 +247,26 @@ def render_asistente_completo():
     with left:
         st.markdown("### 💬 Chats")
         if st.button("➕ Nuevo chat", key="ai_new_chat_btn", use_container_width=True):
-            _new_chat(set_active=True)
+            new_chat_id = create_chat(user_id, "Nuevo chat")
+            st.session_state["ai_active_chat_id"] = new_chat_id
             st.rerun()
 
         st.write("")
 
-        # Ordenar por updated_at (más reciente arriba)
-        convos = st.session_state["ai_conversations"]
-        def _sort_key(item):
-            cid, data = item
-            return data.get("updated_at", "")
-        ordered = sorted(convos.items(), key=_sort_key, reverse=True)
-
-        active_id = st.session_state["ai_active_chat_id"]
+        # Cargar chats del usuario desde BD (ya vienen ordenados por updated_at desc)
+        chats = list_chats(user_id)
+        active_id = st.session_state.get("ai_active_chat_id")
 
         popover_fn = getattr(st, "popover", None)
 
-        for cid, cdata in ordered:
+        for chat_data in chats:
+            cid = chat_data["id"]
             is_active = (cid == active_id)
             row = st.columns([0.82, 0.18], gap="small")
 
             # Botón para abrir chat
             with row[0]:
-                label = cdata.get("title", "Nuevo chat")
+                label = chat_data.get("title", "Nuevo chat")
                 if st.button(
                     label,
                     key=f"open_chat_{cid}",
@@ -258,68 +281,67 @@ def render_asistente_completo():
                 if popover_fn:
                     with st.popover("⋯", use_container_width=True):
                         st.caption(f"ID: {cid}")
-                        new_name = st.text_input("Renombrar", value=cdata.get("title", "Nuevo chat"), key=f"rename_{cid}")
+                        new_name = st.text_input("Renombrar", value=chat_data.get("title", "Nuevo chat"), key=f"rename_{cid}")
                         if st.button("Guardar nombre", key=f"save_name_{cid}", use_container_width=True):
-                            st.session_state["ai_conversations"][cid]["title"] = new_name.strip() or "Nuevo chat"
-                            st.session_state["ai_conversations"][cid]["updated_at"] = _now_str()
+                            rename_chat(cid, new_name.strip() or "Nuevo chat")
                             st.rerun()
 
                         st.divider()
                         confirm = st.checkbox("Confirmar eliminación", key=f"confirm_del_{cid}")
                         if st.button("🗑️ Eliminar chat", key=f"del_{cid}", disabled=not confirm, use_container_width=True):
-                            _delete_chat(cid)
+                            _handle_delete_chat(user_id, cid)
                             st.rerun()
                 else:
                     # Fallback si tu Streamlit no soporta popover
                     with st.expander("⋯", expanded=False):
                         st.caption(f"ID: {cid}")
-                        new_name = st.text_input("Renombrar", value=cdata.get("title", "Nuevo chat"), key=f"rename_{cid}")
+                        new_name = st.text_input("Renombrar", value=chat_data.get("title", "Nuevo chat"), key=f"rename_{cid}")
                         if st.button("Guardar nombre", key=f"save_name_{cid}", use_container_width=True):
-                            st.session_state["ai_conversations"][cid]["title"] = new_name.strip() or "Nuevo chat"
-                            st.session_state["ai_conversations"][cid]["updated_at"] = _now_str()
+                            rename_chat(cid, new_name.strip() or "Nuevo chat")
                             st.rerun()
 
                         st.divider()
                         confirm = st.checkbox("Confirmar eliminación", key=f"confirm_del_{cid}")
                         if st.button("🗑️ Eliminar chat", key=f"del_{cid}", disabled=not confirm, use_container_width=True):
-                            _delete_chat(cid)
+                            _handle_delete_chat(user_id, cid)
                             st.rerun()
 
     # =========================
     # PANEL DERECHO: CHAT ACTIVO
     # =========================
     with right:
-        chat_id, chat = _get_active_chat()
+        chat_id = st.session_state["ai_active_chat_id"]
 
         st.markdown('<div class="card">', unsafe_allow_html=True)
 
         header_cols = st.columns([3, 1])
         with header_cols[0]:
             st.header("🤖 Asistente de Investigación BioStat")
-            st.caption("Tu experto metodológico personal. Multi-chat con historial.")
+            st.caption("Tu experto metodológico personal. Multi-chat con historial persistente.")
         with header_cols[1]:
             if st.button("🧹 Limpiar chat", key="clear_active_chat", use_container_width=True):
-                st.session_state["ai_conversations"][chat_id]["messages"] = []
-                st.session_state["ai_conversations"][chat_id]["updated_at"] = _now_str()
+                clear_chat_messages(chat_id)
                 st.rerun()
 
         st.markdown("---")
 
-        # Mostrar mensajes del chat activo
-        messages = chat.get("messages", [])
+        # Cargar mensajes del chat activo desde BD
+        messages = load_messages(chat_id)
         for m in messages:
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
 
         prompt = st.chat_input("Escribe tu pregunta…")
         if prompt:
-            # Guardar mensaje usuario
-            messages.append({"role": "user", "content": prompt})
-            st.session_state["ai_conversations"][chat_id]["updated_at"] = _now_str()
+            # Guardar mensaje usuario en BD
+            append_message(chat_id, "user", prompt)
 
             # Auto título si es primer mensaje real
-            if st.session_state["ai_conversations"][chat_id]["title"] == "Nuevo chat":
-                st.session_state["ai_conversations"][chat_id]["title"] = _auto_title_from_prompt(prompt)
+            current_chats = list_chats(user_id)
+            current_chat = next((c for c in current_chats if c["id"] == chat_id), None)
+            if current_chat and current_chat["title"] == "Nuevo chat":
+                auto_title = _auto_title_from_prompt(prompt)
+                rename_chat(chat_id, auto_title)
 
             with st.chat_message("user"):
                 st.markdown(prompt)
@@ -350,15 +372,15 @@ CONTEXTO (sin datos sensibles):
                             txt = "No se recibió texto del modelo. Intenta nuevamente."
                         st.markdown(txt)
 
-                messages.append({"role": "assistant", "content": txt})
-                st.session_state["ai_conversations"][chat_id]["messages"] = messages
-                st.session_state["ai_conversations"][chat_id]["updated_at"] = _now_str()
+                # Guardar respuesta del asistente en BD
+                append_message(chat_id, "assistant", txt)
 
             except Exception as e:
                 err = f"Error de conexión con Gemini: {e}"
-                messages.append({"role": "assistant", "content": err})
-                st.session_state["ai_conversations"][chat_id]["messages"] = messages
-                st.session_state["ai_conversations"][chat_id]["updated_at"] = _now_str()
+                append_message(chat_id, "assistant", err)
                 st.error(err)
+
+            # Recargar para mostrar nuevos mensajes
+            st.rerun()
 
         st.markdown('</div>', unsafe_allow_html=True)
