@@ -2170,7 +2170,7 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                     boton_guardar_tabla(
                         df_export,
                         titulo_resultado.replace(" ", "_"),
-                        key=f"corr_export_{key_prefix}_{method_key}",
+                        f"corr_export_{key_prefix}_{method_key}",
                         orientacion="Matriz (coeficiente / p-valor / N)"
                     )
 
