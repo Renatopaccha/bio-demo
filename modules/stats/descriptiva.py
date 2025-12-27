@@ -2133,7 +2133,38 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                     components.html(html_tbl, height=altura, scrolling=True)
 
                     df_export = _construir_tabla_correlacion_export(r_df, p_df, n_df, include_n=include_n)
-                    boton_guardar_tabla(df_export, f"Correlaciones_{method_label}_{titulo}".replace(" ", "_"), f"{key_prefix}_{method_key}")
+                    # =========================
+                    # ACCIONES (Excel / Reporte / IA)
+                    # =========================
+
+                    # Nombre “bonito” y consistente
+                    titulo_resultado = f"Correlaciones — {titulo} ({method_label})"
+
+                    # 1) Exportación Excel + Añadir al reporte (misma lógica que el resto)
+                    #    - df_export es el que representa la tabla “como SPSS” (coef/p/N por variable)
+                    boton_guardar_tabla(
+                        df_export,
+                        titulo_resultado.replace(" ", "_"),
+                        key=f"corr_export_{key_prefix}_{method_key}",
+                        orientacion="Matriz (coeficiente / p-valor / N)"
+                    )
+
+                    # 2) Botones de IA (los mismos 2 que ya usas en otras secciones)
+                    #    - La IA debe interpretar la tabla exportable (df_export), NO el HTML
+                    #    - Incluye contexto del filtro/segmentación para que el análisis sea útil
+                    filtro_activo = st.session_state.get("corr_filter_enabled", False) and bool(st.session_state.get("corr_filter_rules"))
+                    texto_filtro = "Sin filtro." if not filtro_activo else "Con filtro activo (subpoblación)."
+
+                    ai_actions_for_result(
+                        df_resultado=df_export,
+                        titulo=titulo_resultado,
+                        notas=(
+                            f"{texto_filtro} "
+                            f"α={alpha}. include_n={include_n}. "
+                            f"Variables: {', '.join(vars_corr)}."
+                        ),
+                        key=f"corr_ai_{key_prefix}_{method_key}"
+                    )
 
                     with st.expander("🧠 Interpretación automática (borrador para tesis)", expanded=True):
                         texto = generar_interpretacion_correlaciones(r_df, p_df, n_df, metodo=method_key, alpha=alpha, top_k=6)
