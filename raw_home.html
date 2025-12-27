@@ -1,0 +1,1153 @@
+
+<!-- 
+  BIOMETRIC HOME - HTML + CSS Plano para Streamlit
+  Uso: st.markdown(open('home-streamlit.html').read(), unsafe_allow_html=True)
+-->
+
+<style>
+/* ============================================
+   RESET Y VARIABLES
+   ============================================ */
+.biometric-home * {
+  box-sizing: border-box;
+}
+
+.biometric-home {
+  --color-primary: #0B3A82;
+  --color-secondary: #2c5f7c;
+  --color-accent: #4a9ebb;
+  --color-light-blue: #7dd3fc;
+  --color-text-dark: #1e293b;
+  --color-text-gray: #6B7280;
+  --color-border: #e5e7eb;
+  --color-bg-gray: #f9fafb;
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 1.75rem;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+}
+
+.biometric-home {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.6;
+  color: var(--color-text-dark);
+}
+
+/* ============================================
+   HERO SECTION
+   ============================================ */
+.hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 50%, var(--color-accent) 100%);
+  padding: 1px;
+  margin-bottom: 4rem;
+}
+
+.hero-bg-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=');
+  opacity: 0.3;
+}
+
+.hero-content {
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border-radius: calc(var(--radius-xl) - 2px);
+  padding: 3rem;
+  text-align: center;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 2rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+}
+
+.hero-title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.hero-title .highlight {
+  color: var(--color-light-blue);
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0 auto 2rem;
+  max-width: 42rem;
+  line-height: 1.6;
+}
+
+.hero-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2rem;
+  margin-bottom: 2.5rem;
+  color: white;
+}
+
+.kpi {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.kpi-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.kpi-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1;
+  margin: 0;
+}
+
+.kpi-label {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1;
+  margin: 0.25rem 0 0 0;
+}
+
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem 2rem;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: white;
+  color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 20px 25px -5px rgba(255, 255, 255, 0.2), 0 10px 10px -5px rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  backdrop-filter: blur(20px);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-icon {
+  font-size: 1.25rem;
+}
+
+/* ============================================
+   SECTIONS
+   ============================================ */
+.section {
+  margin-bottom: 4rem;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.section-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin: 0 0 0.75rem 0;
+}
+
+.section-subtitle {
+  font-size: 1rem;
+  color: var(--color-text-gray);
+  margin: 0;
+}
+
+/* ============================================
+   GRID LAYOUTS
+   ============================================ */
+.grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+/* ============================================
+   CARDS
+   ============================================ */
+.card {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.card:hover {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-xl);
+  transform: translateY(-4px);
+}
+
+.card-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+  transition: transform 0.3s ease;
+}
+
+.card:hover .card-icon {
+  transform: scale(1.1);
+}
+
+.card-icon-blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.card-icon-emerald {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.card-icon-purple {
+  background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
+}
+
+.card-icon-orange {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+}
+
+.card-icon-pink {
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+}
+
+.card-icon-cyan {
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+}
+
+.card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  margin: 0 0 0.5rem 0;
+}
+
+.card-description {
+  font-size: 0.875rem;
+  color: var(--color-text-gray);
+  line-height: 1.6;
+  margin: 0 0 0.75rem 0;
+}
+
+.card-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-accent);
+  transition: gap 0.3s ease;
+  text-decoration: none;
+}
+
+.card:hover .card-link {
+  gap: 0.75rem;
+}
+
+/* ============================================
+   COMPARISON SECTION
+   ============================================ */
+.comparison {
+  background: linear-gradient(135deg, var(--color-bg-gray) 0%, rgba(239, 246, 255, 0.3) 100%);
+  border-radius: var(--radius-xl);
+  padding: 2.5rem;
+}
+
+.comparison-grid {
+  display: grid;
+  gap: 2rem;
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .comparison-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.comparison-card {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  border: 2px solid var(--color-border);
+}
+
+.comparison-card-premium {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  border: 2px solid var(--color-accent);
+  box-shadow: var(--shadow-xl);
+}
+
+.comparison-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.comparison-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.comparison-icon-red {
+  background: #fee2e2;
+}
+
+.comparison-icon-green {
+  background: rgba(52, 211, 153, 0.2);
+}
+
+.comparison-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.comparison-card .comparison-title {
+  color: var(--color-text-dark);
+}
+
+.comparison-card-premium .comparison-title {
+  color: white;
+}
+
+.comparison-desc {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.comparison-card .comparison-desc {
+  color: var(--color-text-gray);
+}
+
+.comparison-card-premium .comparison-desc {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.comparison-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.comparison-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+}
+
+.comparison-card .comparison-list li {
+  color: var(--color-text-dark);
+}
+
+.comparison-card-premium .comparison-list li {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.list-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+}
+
+.list-icon-cross {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.list-icon-check {
+  background: rgba(52, 211, 153, 0.2);
+  color: #6ee7b7;
+}
+
+/* ============================================
+   ONBOARDING STEPS
+   ============================================ */
+.steps-container {
+  max-width: 64rem;
+  margin: 0 auto;
+  position: relative;
+}
+
+.steps-line {
+  display: none;
+  position: absolute;
+  top: 5rem;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-accent) 0%, var(--color-secondary) 50%, var(--color-accent) 100%);
+  opacity: 0.2;
+}
+
+@media (min-width: 768px) {
+  .steps-line {
+    display: block;
+  }
+}
+
+.steps-grid {
+  display: grid;
+  gap: 2rem;
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .steps-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.step {
+  text-align: center;
+}
+
+.step-icon-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-lg);
+  font-size: 2rem;
+}
+
+.step-icon-blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.step-icon-purple {
+  background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
+}
+
+.step-icon-emerald {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.step-number {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  width: 2rem;
+  height: 2rem;
+  background: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.step-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  margin: 0 0 0.5rem 0;
+}
+
+.step-description {
+  font-size: 0.875rem;
+  color: var(--color-text-gray);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ============================================
+   TRUST BADGES
+   ============================================ */
+.trust-card {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  border: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.trust-icon {
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+  font-size: 2rem;
+}
+
+.trust-icon-blue {
+  background: #dbeafe;
+}
+
+.trust-icon-emerald {
+  background: #d1fae5;
+}
+
+.trust-icon-purple {
+  background: #f3e8ff;
+}
+
+.trust-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.trust-description {
+  font-size: 0.875rem;
+  color: var(--color-text-gray);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ============================================
+   MODULES GRID
+   ============================================ */
+.modules-section {
+  background: linear-gradient(135deg, #eff6ff 0%, rgba(243, 232, 255, 0.3) 100%);
+  border-radius: var(--radius-xl);
+  padding: 2.5rem;
+}
+
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.module-card {
+  background: white;
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.module-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-md);
+}
+
+.module-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: rgba(74, 158, 187, 0.1);
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  transition: background 0.3s ease;
+}
+
+.module-card:hover .module-icon {
+  background: rgba(74, 158, 187, 0.2);
+}
+
+.module-name {
+  font-size: 0.875rem;
+  color: var(--color-text-dark);
+  margin: 0;
+}
+
+/* ============================================
+   FINAL CTA
+   ============================================ */
+.cta-final {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 50%, var(--color-accent) 100%);
+  padding: 3rem;
+  text-align: center;
+}
+
+.cta-final-bg {
+  position: absolute;
+  inset: 0;
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=');
+  opacity: 0.2;
+}
+
+.cta-final-content {
+  position: relative;
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+.cta-emoji {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+}
+
+.cta-quote {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+
+.cta-quote .highlight {
+  color: var(--color-light-blue);
+}
+
+.cta-author {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.125rem;
+  margin: 0 0 2rem 0;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 2rem;
+  }
+  
+  .hero-subtitle {
+    font-size: 1rem;
+  }
+  
+  .hero-kpis {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .hero-cta {
+    flex-direction: column;
+  }
+  
+  .btn {
+    width: 100%;
+  }
+  
+  .section-title {
+    font-size: 1.5rem;
+  }
+  
+  .cta-quote {
+    font-size: 1.25rem;
+  }
+  
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<!-- ============================================
+     HTML CONTENT
+     ============================================ -->
+<div class="biometric-home">
+
+  <!-- HERO SECTION -->
+  <section class="hero">
+    <div class="hero-bg-pattern"></div>
+    <div class="hero-content">
+      
+      <!-- Badge -->
+      <div class="hero-badge">
+        <span>✨</span>
+        <span>Bioestadística para Investigadores en Salud</span>
+      </div>
+      
+      <!-- Título -->
+      <h1 class="hero-title">
+        Estadística que <span class="highlight">impulsa</span> tu investigación
+      </h1>
+      
+      <!-- Subtítulo -->
+      <p class="hero-subtitle">
+        Plataforma integral de análisis bioestadístico diseñada para investigadores, 
+        tesistas y profesionales de la salud. Del dato crudo a la publicación científica.
+      </p>
+      
+      <!-- Mini KPIs -->
+      <div class="hero-kpis">
+        <div class="kpi">
+          <div class="kpi-icon">✓</div>
+          <div>
+            <p class="kpi-value">17+</p>
+            <p class="kpi-label">Módulos</p>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-icon">📊</div>
+          <div>
+            <p class="kpi-value">50+</p>
+            <p class="kpi-label">Pruebas Estadísticas</p>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-icon">🧠</div>
+          <div>
+            <p class="kpi-value">IA</p>
+            <p class="kpi-label">Asistente 24/7</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- CTAs -->
+      <div class="hero-cta">
+        <button class="btn btn-primary">
+          <span class="btn-icon">🚀</span>
+          <span>Comenzar Ahora</span>
+        </button>
+        <button class="btn btn-secondary">
+          <span>📊 Ver Ejemplo de Análisis</span>
+        </button>
+      </div>
+      
+    </div>
+  </section>
+
+  <!-- FEATURES SECTION -->
+  <section class="section">
+    <div class="section-header">
+      <h2 class="section-title">Herramientas Completas de Bioestadística</h2>
+      <p class="section-subtitle">Todo lo que necesitas para tu tesis o investigación en un solo lugar</p>
+    </div>
+    
+    <div class="grid grid-3">
+      
+      <div class="card">
+        <div class="card-icon card-icon-blue">📊</div>
+        <h3 class="card-title">Estadística Descriptiva</h3>
+        <p class="card-description">
+          Medidas de tendencia central, dispersión, gráficos de distribución y análisis exploratorio completo
+        </p>
+        <a href="#" class="card-link">
+          <span>Explorar</span>
+          <span>→</span>
+        </a>
+      </div>
+
+      <div class="card">
+        <div class="card-icon card-icon-emerald">🎯</div>
+        <h3 class="card-title">Pruebas de Inferencia</h3>
+        <p class="card-description">
+          T-test, ANOVA, Chi-cuadrado, Mann-Whitney, Kruskal-Wallis y más pruebas paramétricas y no paramétricas
+        </p>
+        <a href="#" class="card-link">
+          <span>Analizar</span>
+          <span>→</span>
+        </a>
+      </div>
+
+      <div class="card">
+        <div class="card-icon card-icon-purple">📈</div>
+        <h3 class="card-title">Modelado Avanzado</h3>
+        <p class="card-description">
+          Regresión lineal múltiple, regresión logística, análisis multivariado y modelos predictivos
+        </p>
+        <a href="#" class="card-link">
+          <span>Modelar</span>
+          <span>→</span>
+        </a>
+      </div>
+
+      <div class="card">
+        <div class="card-icon card-icon-orange">📉</div>
+        <h3 class="card-title">Análisis de Supervivencia</h3>
+        <p class="card-description">
+          Curvas Kaplan-Meier, Log-Rank test, Cox proportional hazards para estudios de seguimiento
+        </p>
+        <a href="#" class="card-link">
+          <span>Calcular</span>
+          <span>→</span>
+        </a>
+      </div>
+
+      <div class="card">
+        <div class="card-icon card-icon-pink">📋</div>
+        <h3 class="card-title">Tabla 1 Automática</h3>
+        <p class="card-description">
+          Genera tablas de características basales listas para publicación en formato APA/Vancouver
+        </p>
+        <a href="#" class="card-link">
+          <span>Generar</span>
+          <span>→</span>
+        </a>
+      </div>
+
+      <div class="card">
+        <div class="card-icon card-icon-cyan">🧠</div>
+        <h3 class="card-title">Asistente IA</h3>
+        <p class="card-description">
+          Ayuda inteligente para elegir pruebas estadísticas, interpretar resultados y redactar hallazgos
+        </p>
+        <a href="#" class="card-link">
+          <span>Consultar</span>
+          <span>→</span>
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- COMPARISON SECTION -->
+  <section class="section">
+    <div class="comparison">
+      <div class="section-header">
+        <h2 class="section-title">¿Por qué Biometric?</h2>
+        <p class="section-subtitle">Compara el método tradicional con nuestra solución</p>
+      </div>
+      
+      <div class="comparison-grid">
+        
+        <!-- Método Tradicional -->
+        <div class="comparison-card">
+          <div class="comparison-header">
+            <div class="comparison-icon comparison-icon-red">⏱️</div>
+            <div>
+              <h3 class="comparison-title">Método Tradicional</h3>
+              <p class="comparison-desc">Complejo y fragmentado</p>
+            </div>
+          </div>
+          <ul class="comparison-list">
+            <li>
+              <span class="list-icon list-icon-cross">✕</span>
+              <span>Múltiples programas: Excel, SPSS, GraphPad, R/Python separados</span>
+            </li>
+            <li>
+              <span class="list-icon list-icon-cross">✕</span>
+              <span>Curva de aprendizaje empinada en programación estadística</span>
+            </li>
+            <li>
+              <span class="list-icon list-icon-cross">✕</span>
+              <span>Semanas de análisis manual y verificación de resultados</span>
+            </li>
+            <li>
+              <span class="list-icon list-icon-cross">✕</span>
+              <span>Formateo manual de tablas y gráficos para publicación</span>
+            </li>
+            <li>
+              <span class="list-icon list-icon-cross">✕</span>
+              <span>Sin guía para elegir la prueba estadística correcta</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Con Biometric -->
+        <div class="comparison-card comparison-card-premium">
+          <div class="comparison-header">
+            <div class="comparison-icon comparison-icon-green">⚡</div>
+            <div>
+              <h3 class="comparison-title">Con Biometric</h3>
+              <p class="comparison-desc">Todo integrado y guiado</p>
+            </div>
+          </div>
+          <ul class="comparison-list">
+            <li>
+              <span class="list-icon list-icon-check">✓</span>
+              <span>Plataforma todo-en-uno: importa, limpia, analiza y reporta en un lugar</span>
+            </li>
+            <li>
+              <span class="list-icon list-icon-check">✓</span>
+              <span>Interfaz intuitiva sin necesidad de código o comandos complejos</span>
+            </li>
+            <li>
+              <span class="list-icon list-icon-check">✓</span>
+              <span>Resultados en minutos con validación automática de supuestos</span>
+            </li>
+            <li>
+              <span class="list-icon list-icon-check">✓</span>
+              <span>Tablas y gráficos listos para copiar a tu manuscrito</span>
+            </li>
+            <li>
+              <span class="list-icon list-icon-check">✓</span>
+              <span>Asistente IA que recomienda y explica pruebas apropiadas</span>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ONBOARDING SECTION -->
+  <section class="section">
+    <div class="section-header">
+      <h2 class="section-title">Comienza en 3 Pasos</h2>
+      <p class="section-subtitle">De datos crudos a resultados publicables en minutos</p>
+    </div>
+    
+    <div class="steps-container">
+      <div class="steps-line"></div>
+      <div class="steps-grid">
+        
+        <div class="step">
+          <div class="step-icon-wrapper step-icon-blue">
+            <span>💾</span>
+            <div class="step-number">1</div>
+          </div>
+          <h3 class="step-title">Importa tus Datos</h3>
+          <p class="step-description">
+            Arrastra tu archivo Excel o CSV. Limpia valores faltantes y detecta tipos de variables automáticamente
+          </p>
+        </div>
+
+        <div class="step">
+          <div class="step-icon-wrapper step-icon-purple">
+            <span>📊</span>
+            <div class="step-number">2</div>
+          </div>
+          <h3 class="step-title">Analiza con IA</h3>
+          <p class="step-description">
+            Selecciona tus variables, consulta al Asistente IA qué prueba usar, ejecuta análisis con un clic
+          </p>
+        </div>
+
+        <div class="step">
+          <div class="step-icon-wrapper step-icon-emerald">
+            <span>🏆</span>
+            <div class="step-number">3</div>
+          </div>
+          <h3 class="step-title">Exporta Resultados</h3>
+          <p class="step-description">
+            Descarga tablas formateadas, gráficos de alta resolución y tu reporte completo en PDF/Word
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- TRUST BADGES -->
+  <section class="section">
+    <div class="grid grid-3">
+      
+      <div class="trust-card">
+        <div class="trust-icon trust-icon-blue">🔬</div>
+        <h4 class="trust-title">Para Investigadores</h4>
+        <p class="trust-description">
+          Enfocado en ciencias de la salud, epidemiología y ensayos clínicos. Métodos validados académicamente
+        </p>
+      </div>
+
+      <div class="trust-card">
+        <div class="trust-icon trust-icon-emerald">💻</div>
+        <h4 class="trust-title">Open Source</h4>
+        <p class="trust-description">
+          Código abierto, transparente y completamente auditable. Comunidad activa y en constante mejora
+        </p>
+      </div>
+
+      <div class="trust-card">
+        <div class="trust-icon trust-icon-purple">🚀</div>
+        <h4 class="trust-title">En Desarrollo Activo</h4>
+        <p class="trust-description">
+          Nuevas funcionalidades y mejoras cada semana basadas en feedback de usuarios reales
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- MODULES SECTION -->
+  <section class="section">
+    <div class="modules-section">
+      <div class="section-header">
+        <h2 class="section-title">17 Módulos Especializados</h2>
+        <p class="section-subtitle">Herramientas para cada etapa de tu investigación</p>
+      </div>
+      
+      <div class="modules-grid">
+        <div class="module-card">
+          <div class="module-icon">💾</div>
+          <p class="module-name">Limpieza de Datos</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">🔍</div>
+          <p class="module-name">Explorador de Datos</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">📊</div>
+          <p class="module-name">Estadística Descriptiva</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">📈</div>
+          <p class="module-name">Ajuste de Tasas</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">📋</div>
+          <p class="module-name">Tabla 1</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">🎯</div>
+          <p class="module-name">Pruebas de Inferencia</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">📉</div>
+          <p class="module-name">Modelado</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">⚡</div>
+          <p class="module-name">Multivariado</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">⏱️</div>
+          <p class="module-name">Supervivencia</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">🧠</div>
+          <p class="module-name">Psicometría</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">👥</div>
+          <p class="module-name">Asociaciones</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">✓</div>
+          <p class="module-name">Concordancia</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">🛡️</div>
+          <p class="module-name">Diagnósticos</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">📊</div>
+          <p class="module-name">Gráficos Suite</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">✨</div>
+          <p class="module-name">Asistente IA</p>
+        </div>
+        <div class="module-card">
+          <div class="module-icon">📄</div>
+          <p class="module-name">Mi Reporte</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="cta-final">
+    <div class="cta-final-bg"></div>
+    <div class="cta-final-content">
+      <div class="cta-emoji">💡</div>
+      <blockquote class="cta-quote">
+        "La estadística no tiene que ser intimidante.
+        <br />
+        Con las herramientas correctas, puede ser <span class="highlight">poderosa y accesible</span>."
+      </blockquote>
+      <p class="cta-author">— Equipo Biometric</p>
+      <button class="btn btn-primary">
+        <span>Empieza tu Primera Tesis</span>
+        <span class="btn-icon">→</span>
+      </button>
+    </div>
+  </section>
+
+</div>
