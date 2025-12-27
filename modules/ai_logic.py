@@ -106,7 +106,44 @@ def generar_interpretacion_apa(texto_resultados, tipo_prueba, api_key):
         return f"Error al conectar con la IA: {str(e)}"
 
 
-def build_result_prompt(df_resultado, titulo, notas="", df_principal=None):
+
+def df_to_compact_markdown(df, max_rows=40, max_cols=12):
+    """
+    Convierte un DataFrame a Markdown optimizado para contexto de LLM.
+    - Trunca filas y columnas si excede límites.
+    - Agrega nota de truncamiento.
+    - Maneja DataFrames vacíos o None.
+    """
+    if df is None or df.empty:
+        return "Tabla vacía."
+
+    df_limitado = df.copy()
+    advertencias = []
+
+    # Limitar filas
+    if len(df_limitado) > max_rows:
+        df_limitado = df_limitado.head(max_rows)
+        advertencias.append(f"⚠️ Tabla truncada a {max_rows} filas (original: {len(df)} filas)")
+
+    # Limitar columnas
+    if len(df_limitado.columns) > max_cols:
+        df_limitado = df_limitado.iloc[:, :max_cols]
+        advertencias.append(f"⚠️ Tabla truncada a {max_cols} columnas (original: {len(df.columns)} columnas)")
+
+    # Convertir a markdown
+    try:
+        tabla_md = df_limitado.to_markdown(index=True)
+    except Exception:
+        tabla_md = str(df_limitado)
+
+    if advertencias:
+        tabla_md += "\n\n" + "\n".join(advertencias)
+
+    return tabla_md
+
+
+def build_result_prompt(df_resultado, titulo, notas="", df_principal=None, user_question=None):
+
     """
     Construye un prompt estructurado para interpretar tabla de resultados estadísticos.
 
@@ -115,32 +152,15 @@ def build_result_prompt(df_resultado, titulo, notas="", df_principal=None):
         titulo: Título descriptivo de la tabla
         notas: Notas adicionales o contexto sobre el análisis
         df_principal: Dataset principal (opcional) para contexto adicional
+        user_question: Pregunta específica del usuario (opcional)
 
     Returns:
         str: Prompt listo para enviar a Gemini
     """
-    # Convertir DataFrame a markdown (con límites de seguridad)
-    df_limitado = df_resultado.copy()
+    # Usar helper para markdown compacto
+    tabla_md = df_to_compact_markdown(df_resultado)
+    advertencias = "" # Ya vienen en el markdown si aplica
 
-    # Limitar filas y columnas para no sobrecargar el prompt
-    MAX_ROWS = 60
-    MAX_COLS = 12
-
-    if len(df_limitado) > MAX_ROWS:
-        df_limitado = df_limitado.head(MAX_ROWS)
-        truncado_filas = f"\n⚠️ Tabla truncada a {MAX_ROWS} filas (original: {len(df_resultado)} filas)"
-    else:
-        truncado_filas = ""
-
-    if len(df_limitado.columns) > MAX_COLS:
-        df_limitado = df_limitado.iloc[:, :MAX_COLS]
-        truncado_cols = f"\n⚠️ Tabla truncada a {MAX_COLS} columnas (original: {len(df_resultado.columns)} columnas)"
-    else:
-        truncado_cols = ""
-
-    # Convertir a markdown
-    tabla_md = df_limitado.to_markdown(index=True)
-    advertencias = truncado_filas + truncado_cols
 
     # Contexto del dataset principal (si existe)
     contexto_dataset = ""
@@ -152,6 +172,8 @@ CONTEXTO DEL DATASET PRINCIPAL:
 
     # Construir prompt estructurado
     prompt = f"""
+    {f"PREGUNTA DEL USUARIO: {user_question}" if user_question else ""}
+
 Eres un Bioestadístico Senior especializado en investigación en salud (medicina, enfermería, nutrición, salud pública).
 Tu objetivo es interpretar resultados estadísticos de forma académica y clínica para tesis de pregrado y posgrado.
 

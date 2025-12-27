@@ -18,13 +18,13 @@ from modules.utils import boton_guardar_tabla, boton_guardar_grafico, card_conta
 
 # Importar Copiloto IA para interpretación de tablas (con fallback robusto)
 try:
-    from modules.ai_chat import render_interpretar_tabla
+    from modules.ai_chat import render_ai_actions_for_result
 except ImportError:
     try:
-        from ai_chat import render_interpretar_tabla
+        from ai_chat import render_ai_actions_for_result
     except ImportError:
         # Si no está disponible, creamos función dummy
-        def render_interpretar_tabla(*args, **kwargs):
+        def render_ai_actions_for_result(*args, **kwargs):
             pass
 
 from modules.stats.core import (
@@ -1232,11 +1232,12 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
         
         boton_guardar_tabla(df_resumen, "Resumen_Descriptivo_Global", "btn_resumen_global", orientacion="Horizontal (como SPSS)")
 
-        # Copiloto IA: Interpretación académica de la tabla
-        render_interpretar_tabla(
+        # Copiloto IA: Interpretación académica de la tabla + Chat
+        render_ai_actions_for_result(
             df_resultado=df_resumen,
             titulo="Tabla 1: Resumen Descriptivo Global",
-            notas="Estadísticas descriptivas principales del dataset incluyendo medidas de tendencia central, dispersión e intervalos de confianza al 95%."
+            notas="Estadísticas descriptivas principales del dataset incluyendo medidas de tendencia central, dispersión e intervalos de confianza al 95%.",
+            key="univariado_global"
         )
 
         mostrar_interpretacion_ui(
@@ -1505,6 +1506,14 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                         if not freq_df.empty:
                             components.html(_render_tabla_freq_paper(freq_df, max_height_px=420), height=460, scrolling=True)
                             boton_guardar_tabla(freq_df, f"Frecuencia_{var_cat}", f"btn_freq_{i}", orientacion="Horizontal (como SPSS)")
+                            
+                            render_ai_actions_for_result(
+                                freq_df, 
+                                f"Frecuencia: {var_cat}", 
+                                notas="Tabla de frecuencias absoluta y relativa.",
+                                key=f"ai_freq_{i}"
+                            )
+
                             n_total = int(df[var_cat].shape[0])
                             mostrar_interpretacion_ui(
                                 generar_analisis_frecuencias(freq_df, var_cat, n_total_registros=n_total),
@@ -1527,6 +1536,14 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                                 if not freq_df_sub.empty:
                                     components.html(_render_tabla_freq_paper(freq_df_sub, max_height_px=420), height=460, scrolling=True)
                                     boton_guardar_tabla(freq_df_sub, f"Frecuencia_{var_cat}_{segment_var}_{grupo}", f"btn_freq_{i}_{idx}", orientacion="Horizontal (como SPSS)")
+                                    
+                                    render_ai_actions_for_result(
+                                        freq_df_sub, 
+                                        f"Frecuencia: {var_cat} ({segment_var}={grupo})", 
+                                        notas="Tabla de frecuencias para el subgrupo seleccionado.",
+                                        key=f"ai_freq_{i}_{idx}"
+                                    )
+
                                     n_total_g = int(df_sub[var_cat].shape[0])
                                     mostrar_interpretacion_ui(
                                         generar_analisis_frecuencias(freq_df_sub, f"{var_cat} ({segment_var}={grupo})", n_total_registros=n_total_g),
@@ -1848,6 +1865,14 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                 f"btn_ct_{context_key}",
                 orientacion="Horizontal (como SPSS)"
             )
+
+            render_ai_actions_for_result(
+                res.get('raw_n'), 
+                f"Contingencia: {r_var} vs {c_var}", 
+                notas=f"Tabla cruzada que analiza la relación entre {r_var} y {c_var}. {res.get('analysis_text','')}",
+                key=f"ai_ct_{context_key}"
+            )
+
             st.info(f"💡 **Análisis Inteligente (resumen):**\n\n{res.get('analysis_text','')}")
             mostrar_interpretacion_ui(
                 generar_analisis_contingencia(sub_df, r_var, c_var),
@@ -2192,6 +2217,13 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                     st.caption("Nota: Para variables numéricas se muestra Mean ± SD (Paramétrico) o Median (IQR). Para categóricas n (%).")
                     
                     boton_guardar_tabla(df_table1, f"Tabla1_{group_col_comp}", "btn_tabla1", orientacion="Horizontal (como SPSS)")
+                    
+                    render_ai_actions_for_result(
+                        df_table1, 
+                        f"Comparativa: Grupos por {group_col_comp}", 
+                        notas="Tabla 1 de comparación de características basales entre grupos con valores P.",
+                        key="ai_table1"
+                    )
                     
                 else:
                     st.warning("No se pudieron generar resultados. Verifique que las variables tengan datos.")
@@ -2832,6 +2864,13 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                     # Pasar orientación al botón de exportar (usa horizontal si vista académica está desactivada)
                     orientacion_export = orientacion if vista_p else "Horizontal (como SPSS)"
                     boton_guardar_tabla(df_res, "Descriptiva_Global", "btn_dg", orientacion=orientacion_export)
+                    
+                    render_ai_actions_for_result(
+                        df_res, 
+                        "Estadísticos Globales Personalizados", 
+                        notas="Resumen estadístico personalizado con métricas seleccionadas por el usuario.",
+                        key="ai_desc_custom_global"
+                    )
             
             # Caso Segmentado
             else:
@@ -2872,5 +2911,12 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                             # Pasar orientación al botón de exportar (usa horizontal si vista académica está desactivada)
                             orientacion_g_export = orientacion_g if vista_p else "Horizontal (como SPSS)"
                             boton_guardar_tabla(df_res_g, f"Desc_{g}", f"btn_{i}", orientacion=orientacion_g_export)
+                            
+                            render_ai_actions_for_result(
+                                df_res_g, 
+                                f"Estadísticos: {g}", 
+                                notas=f"Resumen estadístico personalizado para el grupo {g}.",
+                                key=f"ai_desc_custom_{i}"
+                            )
         else:
             st.info("👈 Selecciona variables numéricas arriba para comenzar.")

@@ -6,10 +6,10 @@ import uuid
 
 # Import robusto con fallback para diferentes estructuras de proyecto
 try:
-    from modules.ai_logic import generar_resumen_tecnico, configurar_gemini, build_result_prompt
+    from modules.ai_logic import generar_resumen_tecnico, configurar_gemini, build_result_prompt, df_to_compact_markdown
 except ImportError:
     try:
-        from ai_logic import generar_resumen_tecnico, configurar_gemini, build_result_prompt
+        from ai_logic import generar_resumen_tecnico, configurar_gemini, build_result_prompt, df_to_compact_markdown
     except ImportError as e:
         # Si falla todo, mostrar error claro
         import streamlit as st
@@ -217,6 +217,51 @@ CONTEXTO DE DATOS (sin filas crudas):
             st.rerun()
 
 
+
+def set_focus_artifact(df_resultado, titulo, notas=""):
+    """
+    Establece una tabla específica como 'foco' o contexto activo para el chat.
+    """
+    if df_resultado is None:
+        return
+
+    tabla_md = df_to_compact_markdown(df_resultado)
+    
+    st.session_state["ai_focus_artifact"] = {
+        "titulo": titulo,
+        "notas": notas,
+        "tabla_md": tabla_md,
+        "ts": datetime.now().isoformat()
+    }
+
+def render_ai_actions_for_result(df_resultado, titulo, notas="", key=None):
+    """
+    Muestra botones de acción IA para una tabla de resultados:
+    1. Interpretar (borrador académico)
+    2. Continuar en chat (contexto anclado)
+    """
+    if df_resultado is None:
+        return
+
+    key = key or titulo
+    
+    # Contenedor de acciones
+    col1, col2 = st.columns([1, 1], gap="small")
+    
+    with col1:
+        # Reutilizamos la lógica de interpretación existente pero adaptada
+        render_interpretar_tabla(df_resultado, titulo, notas, button_label="📌 Interpretar con IA", key_suffix=key)
+        
+    with col2:
+        if st.button("💬 Continuar en chat", key=f"chat_focus_{key}", use_container_width=True):
+            set_focus_artifact(df_resultado, titulo, notas)
+            # Redirección manual (dependiendo de cómo manejes la navegación en tu app)
+            # Asumimos que hay un 'menu_option' en session_state que controla la vista principal
+            st.session_state["menu_option"] = "Asistente IA"
+            st.toast(f"✅ Tabla '{titulo}' anclada al chat", icon="📌")
+            st.rerun()
+
+
 def render_asistente_completo():
     """Página completa multi-chat estilo ChatGPT/Gemini con persistencia en BD."""
     # Inicializar BD
@@ -245,6 +290,7 @@ def render_asistente_completo():
     # PANEL IZQUIERDO: CHATS
     # =========================
     with left:
+
         st.markdown("### 💬 Chats")
         if st.button("➕ Nuevo chat", key="ai_new_chat_btn", use_container_width=True):
             new_chat_id = create_chat(user_id, "Nuevo chat")
@@ -325,6 +371,21 @@ def render_asistente_completo():
 
         st.markdown("---")
 
+        # --- MOSTRAR ARTEFACTO EN FOCO (SI EXISTE) ---
+        focus_artifact = st.session_state.get("ai_focus_artifact")
+        if focus_artifact:
+            with st.container():
+                st.info(f"📌 **Tabla activa:** {focus_artifact['titulo']}")
+                
+                with st.expander("Ver tabla anclada (contexto)", expanded=False):
+                    st.markdown(focus_artifact.get("notas", ""))
+                    st.markdown(focus_artifact.get("tabla_md", ""))
+                
+                if st.button("Quitar tabla activa", key="remove_focus_artifact", use_container_width=True):
+                    del st.session_state["ai_focus_artifact"]
+                    st.rerun()
+                st.divider()
+
         # Cargar mensajes del chat activo desde BD
         messages = load_messages(chat_id)
         for m in messages:
@@ -352,13 +413,26 @@ def render_asistente_completo():
             if df is not None:
                 contexto_datos = generar_resumen_tecnico(df)
 
+            # Incluir contexto del artefacto si existe
+            contexto_artefacto = ""
+            if focus_artifact:
+                contexto_artefacto = f"""
+TEN EN CUENTA ESTA TABLA DE RESULTADOS QUE EL USUARIO ESTÁ VIENDO AHORA MISMO:
+TÍTULO: {focus_artifact['titulo']}
+NOTAS: {focus_artifact.get('notas', '')}
+TABLA (Markdown):
+{focus_artifact.get('tabla_md', '')}
+"""
+
             system_prompt = f"""
 Eres un Asistente Senior en Bioestadística para investigación en salud.
 No inventes datos ni números. Si falta información, dilo y sugiere qué falta.
 Explica de forma entendible para estudiante e investigador (claro y académico).
 
-CONTEXTO (sin datos sensibles):
+CONTEXTO GLOBAL DEL DATASET (sin datos sensibles):
 {contexto_datos}
+
+{contexto_artefacto}
 """
 
             full_prompt = f"{system_prompt}\n\nPregunta del usuario: {prompt}"
@@ -390,7 +464,7 @@ CONTEXTO (sin datos sensibles):
 # COPILOTO CONECTADO A TABLAS
 # ==========================================
 
-def render_interpretar_tabla(df_resultado, titulo, notas=""):
+def render_interpretar_tabla(df_resultado, titulo, notas="", button_label="📌 Interpretar con IA", key_suffix=None):
     """
     Renderiza botón "Interpretar con IA" para tablas de resultados estadísticos.
 
@@ -398,18 +472,21 @@ def render_interpretar_tabla(df_resultado, titulo, notas=""):
         df_resultado: DataFrame con la tabla de resultados
         titulo: Título descriptivo de la tabla
         notas: Notas adicionales sobre el análisis (opcional)
+        button_label: Texto del botón
+        key_suffix: Sufijo único para keys
     """
     # Generar key única para esta tabla (basada en título)
-    tabla_key = f"ai_interpret_{hash(titulo)}"
+    base_key = key_suffix or titulo
+    tabla_key = f"ai_interpret_{hash(base_key)}"
 
     # Verificar si hay API key configurada
     api_key = _get_gemini_key()
     if not api_key:
-        st.info("💡 Configura tu API Key de Gemini en Secrets para usar el Copiloto de IA")
+        st.info("💡 Configura tu API Key de Gemini para usar IA")
         return
 
     # Botón para interpretar
-    if st.button("📌 Interpretar con IA", key=f"btn_{tabla_key}", use_container_width=True):
+    if st.button(button_label, key=f"btn_{tabla_key}", use_container_width=True):
         # Obtener dataset principal si existe
         df_principal = st.session_state.get("df_principal")
 
