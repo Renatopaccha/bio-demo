@@ -1656,7 +1656,214 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
         </html>
         """
         return html
-    
+
+    def _render_df_paper_generic(
+        df_in: pd.DataFrame,
+        title: str = None,
+        max_height_px: int = 520,
+        first_col_name: str = None,
+        highlight_cells_fn = None,
+        section_row_fn = None
+    ) -> str:
+        """
+        Renderer genérico Paper reutilizable para cualquier tabla.
+
+        Parámetros:
+        - df_in: DataFrame a renderizar
+        - title: Título opcional para mostrar arriba de la tabla
+        - max_height_px: Altura máxima del contenedor con scroll
+        - first_col_name: Nombre de la primera columna (para formateo especial)
+        - highlight_cells_fn: function(col_name, cell_value) -> css_inline_string
+          Ejemplo: lambda col, val: "color: red; font-weight: bold;" if col == "P-Value" and val < 0.05 else ""
+        - section_row_fn: function(row_dict) -> bool
+          Detecta si una fila es "cabecera de sección" (todas las columnas vacías excepto la primera)
+
+        Returns: HTML string
+        """
+        if df_in is None or df_in.empty:
+            return "<div style='font-family:Arial;padding:8px;'>Sin datos para mostrar.</div>"
+
+        df = df_in.copy().reset_index(drop=True)
+
+        # Detectar primera columna si no se especificó
+        if first_col_name is None and len(df.columns) > 0:
+            first_col_name = df.columns[0]
+
+        # Formateo por defecto
+        def _format_cell(val):
+            if pd.isna(val):
+                return ""
+            if isinstance(val, (int, np.integer)):
+                return f"{int(val)}"
+            if isinstance(val, (float, np.floating)):
+                return f"{float(val):.2f}"
+            return str(val)
+
+        # Construir headers
+        headers = "".join([f"<th>{c}</th>" for c in df.columns])
+
+        # Construir rows
+        rows = []
+        for idx, row in df.iterrows():
+            row_dict = row.to_dict()
+
+            # Detectar si es fila de sección
+            is_section = False
+            if section_row_fn is not None:
+                try:
+                    is_section = section_row_fn(row_dict)
+                except Exception:
+                    is_section = False
+
+            tr_class = "section-row" if is_section else ""
+
+            tds = []
+            for j, col in enumerate(df.columns):
+                val = row[col]
+                txt = _format_cell(val)
+
+                # Determinar clase de celda
+                if j == 0:
+                    td_class = "left"
+                else:
+                    # Si ya es string formateado (ej: "12 (34.5%)"), déjalo como está
+                    # Si es numérico puro, alinea a derecha
+                    if isinstance(val, (int, float, np.integer, np.floating)) and not pd.isna(val):
+                        td_class = "num"
+                    else:
+                        # String formateado o mixto, mantén alineación derecha para consistencia
+                        td_class = "num"
+
+                # Aplicar highlight personalizado
+                inline_style = ""
+                if highlight_cells_fn is not None:
+                    try:
+                        inline_style = highlight_cells_fn(col, val) or ""
+                    except Exception:
+                        inline_style = ""
+
+                tds.append(f"<td class='{td_class}' style='{inline_style}'>{txt}</td>")
+
+            rows.append(f"<tr class='{tr_class}'>{''.join(tds)}</tr>")
+
+        # Caption opcional
+        caption_html = f"<div class='cap'>{title}</div>" if title else ""
+
+        html = f"""
+        <html>
+        <head>
+          <style>
+            :root {{
+              --accent: #0B3A82;
+              --ink: #111827;
+              --muted: #6B7280;
+              --line: rgba(17,24,39,.12);
+              --line2: rgba(11,58,130,.22);
+              --bg: #ffffff;
+              --zebra: rgba(17,24,39,.02);
+              --section-bg: rgba(11,58,130,.08);
+            }}
+
+            body {{
+              margin: 0;
+              padding: 0;
+              background: transparent;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+              color: var(--ink);
+            }}
+
+            .wrap {{
+              width: 100%;
+              max-height: {max_height_px}px;
+              overflow: auto;
+              padding: 2px;
+            }}
+
+            .cap {{
+              font-size: 1rem;
+              font-weight: 700;
+              color: var(--accent);
+              margin: 0 0 12px 2px;
+            }}
+
+            table.paper {{
+              width: 100%;
+              border-collapse: separate;
+              border-spacing: 0;
+              background: var(--bg);
+              font-size: 0.95rem;
+              border: 1px solid var(--line);
+              border-radius: 12px;
+              overflow: hidden;
+              box-shadow: 0 1px 10px rgba(17,24,39,.05);
+            }}
+
+            th, td {{
+              padding: 0.70rem 0.85rem;
+              border-bottom: 1px solid var(--line);
+              vertical-align: middle;
+            }}
+
+            thead th {{
+              text-align: left;
+              font-weight: 800;
+              color: var(--accent);
+              background: linear-gradient(to bottom, #ffffff, rgba(11,58,130,.02));
+              border-bottom: 2px solid var(--line2);
+              position: sticky;
+              top: 0;
+              z-index: 2;
+              white-space: nowrap;
+            }}
+
+            /* Primera columna: permite line break */
+            tbody td:first-child {{
+              text-align: left;
+              white-space: normal;
+              max-width: 300px;
+              word-break: break-word;
+              font-weight: 600;
+            }}
+
+            td.left {{ text-align: left; }}
+            td.num  {{
+              text-align: right;
+              font-variant-numeric: tabular-nums;
+              white-space: nowrap;
+            }}
+
+            /* Zebra striping (excluyendo filas de sección) */
+            tbody tr:not(.section-row):nth-child(even) {{ background: var(--zebra); }}
+            tbody tr:hover {{ background: rgba(11,58,130,.04); }}
+
+            /* Filas de sección (cabeceras de variable) */
+            tr.section-row {{
+              background: var(--section-bg);
+              font-weight: 700;
+              border-top: 2px solid var(--line2);
+            }}
+
+            tr.section-row td {{
+              border-top: 2px solid var(--line2);
+            }}
+
+          </style>
+        </head>
+        <body>
+          <div class="wrap">
+            {caption_html}
+            <table class="paper">
+              <thead><tr>{headers}</tr></thead>
+              <tbody>
+                {''.join(rows)}
+              </tbody>
+            </table>
+          </div>
+        </body>
+        </html>
+        """
+        return html
+
     # ==============================================================================
     # PESTAÑA 1: UNIVARIADO (GLOBAL) - SOLO NUMÉRICAS
     # ==============================================================================
@@ -2734,6 +2941,8 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
 
     
     with tab_comparativa:
+        import streamlit.components.v1 as components
+
         st.markdown("### ⚔️ Tabla 1 Profesional (Baseline Characteristics)")
         st.caption("Genera una Tabla 1 lista para publicación con SMD, p-valores y análisis estadístico completo.")
 
@@ -2942,17 +3151,85 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                 df_table1 = pd.DataFrame(table1_rows)
 
                 if not df_table1.empty:
-                    # Render HTML table
-                    html_table = _render_table1_html(df_table1, max_height_px=600)
-                    components.html(html_table, height=650, scrolling=True)
+                    # Define highlight function for cells
+                    def highlight_cells_fn(col_name, cell_value):
+                        """Resalta P-Value significativos y SMD relevantes."""
+                        # Highlight P-Value
+                        if col_name == "P-Value":
+                            val_str = str(cell_value)
+                            if val_str.startswith("<"):
+                                # <0.001 o similar → verde fuerte
+                                return "background: rgba(5, 150, 105, 0.15); color: #047857; font-weight: 800;"
+                            try:
+                                if val_str not in ['—', 'N/A', ''] and float(val_str) < 0.05:
+                                    # p < 0.05 → verde
+                                    return "background: rgba(5, 150, 105, 0.1); color: #059669; font-weight: 700;"
+                            except:
+                                pass
 
-                    # Caption with configuration info
+                        # Highlight SMD
+                        if "SMD" in col_name:
+                            val_str = str(cell_value)
+                            try:
+                                if val_str not in ['—', 'N/A', 'N/A (>2 groups)', 'N/A (>2 cat)', '']:
+                                    smd_val = float(val_str)
+                                    if smd_val >= 0.20:
+                                        # SMD alto (relevante) → amarillo fuerte
+                                        return "background: rgba(251, 191, 36, 0.2); color: #D97706; font-weight: 800;"
+                                    elif smd_val >= 0.10:
+                                        # SMD moderado → amarillo suave
+                                        return "background: rgba(251, 191, 36, 0.1); color: #F59E0B; font-weight: 600;"
+                            except:
+                                pass
+
+                        return ""
+
+                    # Define section row detector
+                    def section_row_fn(row_dict):
+                        """Detecta filas de cabecera de variable (todas las columnas vacías excepto la primera)."""
+                        # Si tiene la marca is_header, es sección
+                        if row_dict.get('is_header', False):
+                            return True
+
+                        # Heurística: si solo la primera columna (Variable) tiene texto y el resto está vacío
+                        cols = list(row_dict.keys())
+                        if len(cols) < 2:
+                            return False
+
+                        first_col = cols[0]
+                        first_val = str(row_dict.get(first_col, '')).strip()
+
+                        # Si la primera columna está vacía, no es sección
+                        if not first_val:
+                            return False
+
+                        # Revisar si todas las demás columnas están vacías
+                        other_cols = [c for c in cols if c not in [first_col, 'is_header', 'is_subrow']]
+                        all_empty = all(
+                            str(row_dict.get(c, '')).strip() in ['', 'nan', 'None']
+                            for c in other_cols
+                        )
+
+                        return all_empty
+
+                    # Render usando el renderer genérico
+                    html_table = _render_df_paper_generic(
+                        df_table1,
+                        title=f"Tabla 1 — Comparativa por {group_col_comp}",
+                        max_height_px=560,
+                        first_col_name=df_table1.columns[0] if len(df_table1.columns) > 0 else None,
+                        highlight_cells_fn=highlight_cells_fn,
+                        section_row_fn=section_row_fn
+                    )
+                    components.html(html_table, height=620, scrolling=True)
+
+                    # Caption con explicación de highlighting
                     caption_parts = []
                     caption_parts.append(f"**Configuración:** {numeric_format}")
                     if show_pvalue:
-                        caption_parts.append("P-valores incluidos")
+                        caption_parts.append("P-valores <0.05 resaltados en verde")
                     if show_smd:
-                        caption_parts.append("SMD incluido")
+                        caption_parts.append("SMD ≥0.20 resaltado en amarillo (relevante)")
                     if show_missing:
                         caption_parts.append(f"Missing incluido (filtro ≤{max_missing_pct}%)")
 
