@@ -965,7 +965,8 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
         selected_vars = st.multiselect(
             "Seleccione las variables a analizar:",
             options=numericas,
-            default=numericas[:5] if len(numericas) > 5 else numericas
+            default=numericas[:5] if len(numericas) > 5 else numericas,
+            key="desc_selected_vars_global"
         )
     
     if not selected_vars:
@@ -2132,7 +2133,32 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                     altura = min(200 + (len(vars_corr) * (3 if include_n else 2) * 44), 820)
                     components.html(html_tbl, height=altura, scrolling=True)
 
-                    df_export = _construir_tabla_correlacion_export(r_df, p_df, n_df, include_n=include_n)
+                    df_export_raw = _construir_tabla_correlacion_export(r_df, p_df, n_df, include_n=include_n)
+                    
+                    # -----------------------------------------------------
+                    # Formato para que Excel se vea bien (3 decimales, p<0.001)
+                    # -----------------------------------------------------
+                    df_export = df_export_raw.copy()
+                    vars_cols = [c for c in df_export.columns if c not in ["Variable","Métrica"]]
+
+                    def _fmt_r(x):
+                        return "" if pd.isna(x) else f"{float(x):.3f}"
+                    def _fmt_p(x):
+                        if pd.isna(x): return ""
+                        x = float(x)
+                        return "<0.001" if x < 0.001 else f"{x:.3f}"
+                    def _fmt_n(x):
+                        return "" if pd.isna(x) else str(int(x))
+
+                    for i in df_export.index:
+                        m = str(df_export.loc[i, "Métrica"])
+                        if m == "r":
+                            for c in vars_cols: df_export.loc[i, c] = _fmt_r(df_export.loc[i, c])
+                        elif m == "p":
+                            for c in vars_cols: df_export.loc[i, c] = _fmt_p(df_export.loc[i, c])
+                        elif m == "N":
+                            for c in vars_cols: df_export.loc[i, c] = _fmt_n(df_export.loc[i, c])
+
                     # =========================
                     # ACCIONES (Excel / Reporte / IA)
                     # =========================
@@ -2140,8 +2166,7 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                     # Nombre “bonito” y consistente
                     titulo_resultado = f"Correlaciones — {titulo} ({method_label})"
 
-                    # 1) Exportación Excel + Añadir al reporte (misma lógica que el resto)
-                    #    - df_export es el que representa la tabla “como SPSS” (coef/p/N por variable)
+                    # 1) Exportación Excel + Añadir al reporte (usamos la versión formateada)
                     boton_guardar_tabla(
                         df_export,
                         titulo_resultado.replace(" ", "_"),
@@ -2149,14 +2174,13 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
                         orientacion="Matriz (coeficiente / p-valor / N)"
                     )
 
-                    # 2) Botones de IA (los mismos 2 que ya usas en otras secciones)
-                    #    - La IA debe interpretar la tabla exportable (df_export), NO el HTML
-                    #    - Incluye contexto del filtro/segmentación para que el análisis sea útil
+                    # 2) Botones de IA
+                    #    - La IA debe usar df_export_raw para tener precisión numérica
                     filtro_activo = st.session_state.get("corr_filter_enabled", False) and bool(st.session_state.get("corr_filter_rules"))
                     texto_filtro = "Sin filtro." if not filtro_activo else "Con filtro activo (subpoblación)."
 
                     ai_actions_for_result(
-                        df_resultado=df_export,
+                        df_resultado=df_export_raw,
                         titulo=titulo_resultado,
                         notas=(
                             f"{texto_filtro} "
@@ -2957,8 +2981,10 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
 # =============================================================================
 def render():
     import streamlit as st
+    import inspect
     df = st.session_state.get("df_principal")
-    try:
+    sig = inspect.signature(render_descriptiva)
+    if len(sig.parameters) >= 1:
         return render_descriptiva(df)
-    except TypeError:
+    else:
         return render_descriptiva()
