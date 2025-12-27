@@ -1,10 +1,10 @@
-import { LucideIcon, TrendingUp, TrendingDown } from 'lucide-react';
+import { LucideIcon, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 interface StatCardProps {
   title: string;
   value: string;
   change: string;
-  trend: 'up' | 'down';
+  trend: 'up' | 'down' | 'neutral';
   icon: LucideIcon;
   color: 'blue' | 'emerald' | 'purple' | 'cyan' | 'rose';
 }
@@ -25,12 +25,14 @@ export function StatCard({ title, value, change, trend, icon: Icon, color }: Sta
           <p className="text-gray-600 text-sm mb-2">{title}</p>
           <p className="text-3xl text-gray-900 mb-2">{value}</p>
           <div className="flex items-center gap-1 text-sm">
-            {trend === 'up' ? (
-              <TrendingUp className="w-4 h-4 text-emerald-600" />
-            ) : (
-              <TrendingDown className="w-4 h-4 text-rose-600" />
-            )}
-            <span className={trend === 'up' ? 'text-emerald-600' : 'text-rose-600'}>
+            {trend === 'up' && <TrendingUp className="w-4 h-4 text-emerald-600" />}
+            {trend === 'down' && <TrendingDown className="w-4 h-4 text-rose-600" />}
+            {trend === 'neutral' && <Minus className="w-4 h-4 text-gray-400" />}
+
+            <span className={
+              trend === 'up' ? 'text-emerald-600' :
+                trend === 'down' ? 'text-rose-600' : 'text-gray-500'
+            }>
               {change}
             </span>
           </div>
