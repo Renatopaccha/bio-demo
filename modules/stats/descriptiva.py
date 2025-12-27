@@ -37,7 +37,6 @@ from modules.stats.core import (
     get_qq_coordinates,
     analyze_outlier_details,
     calculate_group_comparison,
-    generate_table_one_structure,
     calculate_frequency_table,
     generate_crosstab_analysis,
     interpret_crosstab
@@ -931,6 +930,515 @@ def _epidata_apply_filter(df: pd.DataFrame, rules: List[Dict[str, Any]], comb: s
 
     df2 = df[final_mask].copy()
     return df2, f"Filtro aplicado: {txt}"
+
+
+# =============================================================================
+# HELPER FUNCTIONS FOR TABLE 1 PRO (BASELINE CHARACTERISTICS)
+# =============================================================================
+
+def _calculate_smd(group1_data, group2_data, is_categorical=False):
+    """
+    Calculate Standardized Mean Difference (SMD).
+    For continuous: abs(mean1 - mean2) / pooled_sd
+    For binary categorical: (p1 - p2) / sqrt(p*(1-p)) where p is pooled proportion
+    """
+    if is_categorical:
+        # Assume binary (0/1 or True/False)
+        p1 = group1_data.mean()
+        p2 = group2_data.mean()
+        p_pooled = (len(group1_data) * p1 + len(group2_data) * p2) / (len(group1_data) + len(group2_data))
+
+        if p_pooled == 0 or p_pooled == 1:
+            return 0.0
+
+        denominator = np.sqrt(p_pooled * (1 - p_pooled))
+        if denominator == 0:
+            return 0.0
+
+        return abs(p1 - p2) / denominator
+    else:
+        # Continuous variable
+        mean1 = group1_data.mean()
+        mean2 = group2_data.mean()
+
+        var1 = group1_data.var()
+        var2 = group2_data.var()
+        n1 = len(group1_data)
+        n2 = len(group2_data)
+
+        # Pooled standard deviation
+        pooled_var = ((n1 - 1) * var1 + (n2 - 1) * var2) / (n1 + n2 - 2)
+        pooled_sd = np.sqrt(pooled_var)
+
+        if pooled_sd == 0:
+            return 0.0
+
+        return abs(mean1 - mean2) / pooled_sd
+
+
+def _check_normality_by_group(df, var, group_col):
+    """
+    Check normality for each group separately.
+    Returns True if ALL groups are normal (p > 0.05).
+    """
+    groups = df[group_col].unique()
+    all_normal = True
+
+    for group in groups:
+        group_data = df[df[group_col] == group][var].dropna()
+
+        if len(group_data) < 3:
+            return False  # Not enough data, use non-parametric
+
+        # Use Shapiro if n < 50, else use Kolmogorov-Smirnov
+        if len(group_data) < 50:
+            try:
+                _, p_val = stats.shapiro(group_data)
+            except Exception:
+                return False
+        else:
+            try:
+                _, p_val = stats.kstest(group_data, 'norm', args=(group_data.mean(), group_data.std()))
+            except Exception:
+                return False
+
+        if p_val <= 0.05:
+            all_normal = False
+            break
+
+    return all_normal
+
+
+def _calculate_pvalue_numeric(df, var, group_col, force_parametric=None):
+    """
+    Calculate p-value for numeric variable.
+    force_parametric: None (auto), 'parametric', 'nonparametric'
+    """
+    groups = df[group_col].unique()
+    group_data = [df[df[group_col] == g][var].dropna() for g in groups]
+
+    # Remove empty groups
+    group_data = [g for g in group_data if len(g) > 0]
+
+    if len(group_data) < 2:
+        return np.nan, "N/A"
+
+    # Determine test type
+    if force_parametric == 'parametric':
+        use_parametric = True
+    elif force_parametric == 'nonparametric':
+        use_parametric = False
+    else:
+        # Auto: check normality
+        use_parametric = _check_normality_by_group(df, var, group_col)
+
+    try:
+        if len(group_data) == 2:
+            if use_parametric:
+                # t-test
+                stat, p_val = stats.ttest_ind(group_data[0], group_data[1])
+                test_name = "t-test"
+            else:
+                # Mann-Whitney
+                stat, p_val = stats.mannwhitneyu(group_data[0], group_data[1], alternative='two-sided')
+                test_name = "Mann-Whitney"
+        else:
+            if use_parametric:
+                # ANOVA
+                stat, p_val = stats.f_oneway(*group_data)
+                test_name = "ANOVA"
+            else:
+                # Kruskal-Wallis
+                stat, p_val = stats.kruskal(*group_data)
+                test_name = "Kruskal-Wallis"
+
+        return p_val, test_name
+    except Exception as e:
+        return np.nan, "Error"
+
+
+def _calculate_pvalue_categorical(df, var, group_col):
+    """
+    Calculate p-value for categorical variable using Chi-square or Fisher exact.
+    """
+    try:
+        contingency_table = pd.crosstab(df[var], df[group_col])
+
+        # Check if it's 2x2 for Fisher's exact
+        if contingency_table.shape == (2, 2):
+            # Try Fisher's exact if any expected frequency < 5
+            expected = stats.contingency.expected_freq(contingency_table)
+            if (expected < 5).any():
+                # Fisher's exact
+                from scipy.stats import fisher_exact
+                _, p_val = fisher_exact(contingency_table)
+                return p_val, "Fisher"
+
+        # Chi-square
+        chi2, p_val, dof, expected = stats.chi2_contingency(contingency_table)
+        return p_val, "Chi-square"
+
+    except Exception as e:
+        return np.nan, "N/A"
+
+
+def _format_numeric_result(data, format_type='auto', decimals=2):
+    """
+    Format numeric result as Mean±SD or Median (IQR).
+    format_type: 'auto', 'mean_sd', 'median_iqr'
+    """
+    if len(data) == 0:
+        return "—"
+
+    if format_type == 'mean_sd':
+        mean_val = data.mean()
+        sd_val = data.std()
+        return f"{mean_val:.{decimals}f} ± {sd_val:.{decimals}f}"
+    elif format_type == 'median_iqr':
+        median_val = data.median()
+        q1 = data.quantile(0.25)
+        q3 = data.quantile(0.75)
+        return f"{median_val:.{decimals}f} ({q1:.{decimals}f}–{q3:.{decimals}f})"
+    else:
+        # Auto: check normality
+        if len(data) >= 3:
+            try:
+                if len(data) < 50:
+                    _, p_val = stats.shapiro(data)
+                else:
+                    _, p_val = stats.kstest(data, 'norm', args=(data.mean(), data.std()))
+
+                if p_val > 0.05:
+                    # Normal: use mean±SD
+                    mean_val = data.mean()
+                    sd_val = data.std()
+                    return f"{mean_val:.{decimals}f} ± {sd_val:.{decimals}f}"
+            except Exception:
+                pass
+
+        # Non-normal or error: use median (IQR)
+        median_val = data.median()
+        q1 = data.quantile(0.25)
+        q3 = data.quantile(0.75)
+        return f"{median_val:.{decimals}f} ({q1:.{decimals}f}–{q3:.{decimals}f})"
+
+
+def _build_table1_row_numeric(df, var, group_col, groups, format_type='auto', decimals=2,
+                                show_missing=True, show_pvalue=True, show_smd=True,
+                                force_parametric=None):
+    """
+    Build a single row for numeric variable in Table 1.
+    Returns dict with all columns.
+    """
+    row = {"Variable": var}
+
+    # Calculate stats for each group
+    group_results = []
+    for group in groups:
+        group_data = df[df[group_col] == group][var].dropna()
+        formatted = _format_numeric_result(group_data, format_type, decimals)
+        row[str(group)] = formatted
+        group_results.append(group_data)
+
+    # Total
+    total_data = df[var].dropna()
+    row["Total"] = _format_numeric_result(total_data, format_type, decimals)
+
+    # Missing
+    if show_missing:
+        missing_count = df[var].isna().sum()
+        missing_pct = (missing_count / len(df)) * 100
+        row["Missing"] = f"{missing_count} ({missing_pct:.1f}%)"
+
+    # P-value
+    if show_pvalue:
+        p_val, test_name = _calculate_pvalue_numeric(df, var, group_col, force_parametric)
+        if pd.isna(p_val):
+            row["P-Value"] = "—"
+        elif p_val < 0.001:
+            row["P-Value"] = "<0.001"
+        else:
+            row["P-Value"] = f"{p_val:.3f}"
+        row["Test"] = test_name
+
+    # SMD
+    if show_smd and len(groups) == 2:
+        if len(group_results[0]) > 0 and len(group_results[1]) > 0:
+            smd = _calculate_smd(group_results[0], group_results[1], is_categorical=False)
+            row["SMD"] = f"{smd:.2f}"
+        else:
+            row["SMD"] = "—"
+    elif show_smd and len(groups) > 2:
+        row["SMD"] = "N/A (>2 groups)"
+
+    return row
+
+
+def _build_table1_rows_categorical(df, var, group_col, groups, show_missing=True,
+                                     show_pvalue=True, show_smd=True):
+    """
+    Build multiple rows for categorical variable in Table 1 (one per category).
+    Returns list of dicts.
+    """
+    rows = []
+
+    # Header row with variable name
+    header_row = {"Variable": var, "is_header": True}
+    for group in groups:
+        header_row[str(group)] = ""
+    header_row["Total"] = ""
+    if show_missing:
+        header_row["Missing"] = ""
+    if show_pvalue:
+        header_row["P-Value"] = ""
+        header_row["Test"] = ""
+    if show_smd:
+        header_row["SMD"] = ""
+
+    rows.append(header_row)
+
+    # Get categories
+    categories = sorted(df[var].dropna().unique())
+
+    # Calculate p-value once for the entire variable
+    p_val_overall = np.nan
+    test_name_overall = "N/A"
+    if show_pvalue:
+        p_val_overall, test_name_overall = _calculate_pvalue_categorical(df, var, group_col)
+
+    # Calculate SMD for binary variables (2 categories)
+    smd_overall = None
+    if show_smd and len(categories) == 2 and len(groups) == 2:
+        # Binary variable: use first category as "positive"
+        first_cat = categories[0]
+        group1_data = (df[df[group_col] == groups[0]][var] == first_cat).astype(int)
+        group2_data = (df[df[group_col] == groups[1]][var] == first_cat).astype(int)
+
+        if len(group1_data) > 0 and len(group2_data) > 0:
+            smd_overall = _calculate_smd(group1_data, group2_data, is_categorical=True)
+
+    # Build rows for each category
+    for i, category in enumerate(categories):
+        cat_row = {"Variable": f"  {category}", "is_subrow": True}
+
+        # Count and percentage for each group
+        for group in groups:
+            group_total = len(df[df[group_col] == group])
+            cat_count = len(df[(df[group_col] == group) & (df[var] == category)])
+            cat_pct = (cat_count / group_total * 100) if group_total > 0 else 0
+            cat_row[str(group)] = f"{cat_count} ({cat_pct:.1f}%)"
+
+        # Total
+        total_count = len(df[df[var] == category])
+        total_pct = (total_count / len(df) * 100) if len(df) > 0 else 0
+        cat_row["Total"] = f"{total_count} ({total_pct:.1f}%)"
+
+        # Missing (only show on first category row)
+        if show_missing:
+            if i == 0:
+                missing_count = df[var].isna().sum()
+                missing_pct = (missing_count / len(df)) * 100
+                cat_row["Missing"] = f"{missing_count} ({missing_pct:.1f}%)"
+            else:
+                cat_row["Missing"] = ""
+
+        # P-value (only show on first category row)
+        if show_pvalue:
+            if i == 0:
+                if pd.isna(p_val_overall):
+                    cat_row["P-Value"] = "—"
+                elif p_val_overall < 0.001:
+                    cat_row["P-Value"] = "<0.001"
+                else:
+                    cat_row["P-Value"] = f"{p_val_overall:.3f}"
+                cat_row["Test"] = test_name_overall
+            else:
+                cat_row["P-Value"] = ""
+                cat_row["Test"] = ""
+
+        # SMD (only show on first category row for binary variables)
+        if show_smd:
+            if i == 0 and smd_overall is not None:
+                cat_row["SMD"] = f"{smd_overall:.2f}"
+            elif i == 0 and len(categories) > 2:
+                cat_row["SMD"] = "N/A (>2 cat)"
+            elif i == 0 and len(groups) > 2:
+                cat_row["SMD"] = "N/A (>2 groups)"
+            else:
+                cat_row["SMD"] = ""
+
+        rows.append(cat_row)
+
+    return rows
+
+
+def _render_table1_html(df_table1, max_height_px=600):
+    """
+    Render Table 1 in professional HTML format.
+    """
+    if df_table1 is None or df_table1.empty:
+        return "<div style='font-family:Arial; padding:8px;'>Sin datos para mostrar.</div>"
+
+    # Build headers
+    headers = "".join([f"<th>{c}</th>" for c in df_table1.columns if c not in ['is_header', 'is_subrow']])
+
+    # Build body
+    body = []
+    for _, row in df_table1.iterrows():
+        is_header = row.get('is_header', False)
+        is_subrow = row.get('is_subrow', False)
+
+        if is_header:
+            tr_class = "var-header"
+        elif is_subrow:
+            tr_class = "cat-subrow"
+        else:
+            tr_class = ""
+
+        tds = []
+        for j, col in enumerate(df_table1.columns):
+            if col in ['is_header', 'is_subrow']:
+                continue
+
+            val = row[col]
+
+            # First column (Variable) is left-aligned
+            if col == "Variable":
+                td_class = "left"
+                if is_header:
+                    td_class += " bold"
+            else:
+                td_class = "num"
+
+            # Highlight significant p-values
+            if col == "P-Value" and val not in ["", "—", "N/A"]:
+                try:
+                    if val.startswith("<") or (val.replace('.', '', 1).isdigit() and float(val) < 0.05):
+                        td_class += " significant"
+                except Exception:
+                    pass
+
+            # Highlight high SMD
+            if col == "SMD" and val not in ["", "—", "N/A", "N/A (>2 groups)", "N/A (>2 cat)"]:
+                try:
+                    smd_val = float(val)
+                    if smd_val > 0.20:
+                        td_class += " high-smd"
+                except Exception:
+                    pass
+
+            tds.append(f"<td class='{td_class}'>{val}</td>")
+
+        body.append(f"<tr class='{tr_class}'>{''.join(tds)}</tr>")
+
+    html = f"""
+    <html>
+    <head>
+      <style>
+        :root {{
+          --accent: #0B3A82;
+          --ink: #111827;
+          --muted: #6B7280;
+          --line: rgba(17,24,39,.12);
+          --line2: rgba(11,58,130,.22);
+          --bg: #ffffff;
+          --zebra: rgba(17,24,39,.02);
+          --header-bg: rgba(11,58,130,.08);
+        }}
+
+        body {{
+          margin:0; padding:0; background:transparent;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+          color: var(--ink);
+        }}
+
+        .wrap {{
+          width: 100%;
+          max-height: {max_height_px}px;
+          overflow: auto;
+          padding: 2px;
+        }}
+
+        table.paper {{
+          width: 100%;
+          border-collapse: separate;
+          border-spacing: 0;
+          background: var(--bg);
+          font-size: 0.95rem;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 1px 10px rgba(17,24,39,.05);
+        }}
+
+        th, td {{
+          padding: 0.70rem 0.85rem;
+          border-bottom: 1px solid var(--line);
+          white-space: nowrap;
+          vertical-align: middle;
+        }}
+
+        thead th {{
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          text-align: left;
+          font-weight: 800;
+          color: var(--accent);
+          background: linear-gradient(to bottom, #ffffff, rgba(11,58,130,.02));
+          border-bottom: 2px solid var(--line2);
+        }}
+
+        td.left {{ text-align: left; }}
+        td.num  {{ text-align: right; font-variant-numeric: tabular-nums; }}
+        td.bold {{ font-weight: 700; }}
+
+        /* Variable header rows */
+        tr.var-header {{
+          background: var(--header-bg);
+          font-weight: 700;
+        }}
+
+        tr.var-header td {{
+          border-top: 2px solid var(--line2);
+        }}
+
+        /* Category subrows */
+        tr.cat-subrow td:first-child {{
+          padding-left: 2rem;
+          color: var(--muted);
+        }}
+
+        /* Zebra striping */
+        tbody tr:not(.var-header):nth-child(even) {{ background: var(--zebra); }}
+
+        /* Highlight significant p-values */
+        td.significant {{
+          font-weight: 800;
+          color: #059669;
+          background: rgba(5, 150, 105, 0.1);
+        }}
+
+        /* Highlight high SMD */
+        td.high-smd {{
+          font-weight: 800;
+          color: #DC2626;
+          background: rgba(220, 38, 38, 0.1);
+        }}
+
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <table class="paper">
+          <thead><tr>{headers}</tr></thead>
+          <tbody>{''.join(body)}</tbody>
+        </table>
+      </div>
+    </body>
+    </html>
+    """
+    return html
 
 
 # --- RENDER PRINCIPAL ---
@@ -2226,64 +2734,320 @@ def render_descriptiva(df: Optional[pd.DataFrame] = None, selected_vars: Optiona
 
     
     with tab_comparativa:
-        st.markdown("### ⚔️ Comparativa de Grupos (Tabla 1)")
+        st.markdown("### ⚔️ Tabla 1 Profesional (Baseline Characteristics)")
+        st.caption("Genera una Tabla 1 lista para publicación con SMD, p-valores y análisis estadístico completo.")
+
+        # ==============================================================================
+        # PASO 1: SELECCIÓN DE VARIABLE DE AGRUPACIÓN
+        # ==============================================================================
+        st.markdown("#### 📍 Paso 1: Variable de Agrupación")
+
         cat_vars = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
         group_col_comp = st.selectbox(
-            "🔀 Agrupar por (Variable Categórica):",
+            "🔀 Seleccione la variable que define los grupos a comparar:",
             options=["(Ninguno)"] + cat_vars,
             index=0,
-            key="group_selector_tab2",
-            help="Seleccione grupos (ej: Tratamiento vs Control) para generar p-values y comparaciones."
+            key="t1pro_group_selector",
+            help="Ejemplo: Grupo de tratamiento, Sexo, Diagnóstico, etc."
         )
-        
+
         if group_col_comp == "(Ninguno)":
-            st.info("ℹ️ Seleccione una variable de agrupación arriba para generar la Tabla 1 con P-values.")
+            st.info("👆 Seleccione una variable de agrupación para continuar con la configuración de la Tabla 1.")
         else:
-            n_groups = df[group_col_comp].nunique()
+            # Show group information
+            groups = sorted(df[group_col_comp].dropna().unique())
+            n_groups = len(groups)
+
             if n_groups > 10:
-                st.warning(f"⚠️ La variable '{group_col_comp}' tiene {n_groups} categorías. La tabla será muy ancha.")
-            
-            st.markdown(f"**Comparando grupos según:** `{group_col_comp}`")
+                st.warning(f"⚠️ La variable '{group_col_comp}' tiene {n_groups} categorías. La tabla será muy ancha y difícil de interpretar. Se recomienda usar ≤5 grupos.")
+
+            # Display N per group
+            group_counts = df[group_col_comp].value_counts()
+            total_n = len(df)
+
+            st.markdown(f"**Variable de agrupación:** `{group_col_comp}` ({n_groups} grupos, N total = {total_n})")
+
+            cols_n = st.columns(min(n_groups, 5))
+            for i, group in enumerate(groups[:5]):  # Show max 5 groups in columns
+                with cols_n[i % 5]:
+                    n_group = group_counts.get(group, 0)
+                    pct_group = (n_group / total_n * 100) if total_n > 0 else 0
+                    st.metric(label=str(group), value=f"{n_group}", delta=f"{pct_group:.1f}%")
+
+            if n_groups > 5:
+                st.caption(f"... y {n_groups - 5} grupos más. Ver tabla completa abajo.")
+
             st.divider()
-            
+
+            # ==============================================================================
+            # PASO 2: SELECCIÓN DE VARIABLES
+            # ==============================================================================
+            st.markdown("#### 📋 Paso 2: Variables a Incluir en Tabla 1")
+
+            col_auto, col_missing = st.columns(2)
+
+            with col_auto:
+                auto_suggest = st.checkbox(
+                    "🤖 Auto-sugerir variables",
+                    value=True,
+                    key="t1pro_auto_suggest",
+                    help="Preselecciona automáticamente las variables numéricas y categóricas más comunes (excluyendo IDs y fechas)."
+                )
+
+            with col_missing:
+                max_missing_pct = st.slider(
+                    "📊 Incluir solo variables con ≤ X% missing:",
+                    min_value=0,
+                    max_value=100,
+                    value=100,
+                    step=5,
+                    key="t1pro_missing_max",
+                    help="Filtra variables con demasiados valores faltantes."
+                )
+
+            # Calculate available variables
             available_vars = [c for c in df.columns if c != group_col_comp]
-            default_mix = [v for v in selected_vars if v in available_vars]
-            
-            table1_vars = st.multiselect(
-                "Seleccione variables para la Tabla 1:",
-                options=available_vars,
-                default=default_mix,
-                key="table1_vars_selector"
-            )
-            
-            if table1_vars:
-                with st.spinner("Calculando estadísticas y P-Values..."):
-                    df_table1 = generate_table_one_structure(df, table1_vars, group_col_comp)
-                
-                if not df_table1.empty:
-                    def highlight_p(val):
-                        return 'font-weight: bold; color: #2c3e50; background-color: #d5dbdb' if isinstance(val, str) and (val.startswith("<") or (val.replace('.','',1).isdigit() and float(val) < 0.05)) else ''
-                    
-                    st.dataframe(
-                        df_table1.style.applymap(highlight_p, subset=['P-Value']).set_properties(**{'text-align': 'left'}),
-                        use_container_width=True,
-                        hide_index=True
-                    )
-                    st.caption("Nota: Para variables numéricas se muestra Mean ± SD (Paramétrico) o Median (IQR). Para categóricas n (%).")
-                    
-                    boton_guardar_tabla(df_table1, f"Tabla1_{group_col_comp}", "btn_tabla1", orientacion="Horizontal (como SPSS)")
-                    
-                    ai_actions_for_result(
-                        df_table1, 
-                        f"Comparativa: Grupos por {group_col_comp}", 
-                        notas="Tabla 1 de comparación de características basales entre grupos con valores P.",
-                        key="ai_table1"
-                    )
-                    
-                else:
-                    st.warning("No se pudieron generar resultados. Verifique que las variables tengan datos.")
+
+            # Apply missing filter
+            if max_missing_pct < 100:
+                available_vars = [
+                    v for v in available_vars
+                    if (df[v].isna().sum() / len(df) * 100) <= max_missing_pct
+                ]
+
+            # Auto-suggest defaults
+            if auto_suggest:
+                # Include numeric variables
+                numeric_vars = df[available_vars].select_dtypes(include=[np.number]).columns.tolist()
+
+                # Include categorical with reasonable number of categories (2-10)
+                categorical_vars = []
+                for v in available_vars:
+                    if v in df.select_dtypes(include=['object', 'category', 'bool']).columns:
+                        n_unique = df[v].nunique()
+                        if 2 <= n_unique <= 10:
+                            categorical_vars.append(v)
+
+                # Exclude likely IDs (high cardinality or contains "id" in name)
+                exclude_patterns = ['id', 'ID', 'Id', 'codigo', 'code', 'key']
+                default_vars = []
+                for v in numeric_vars + categorical_vars:
+                    # Exclude if name contains ID pattern
+                    if any(pattern in v for pattern in exclude_patterns):
+                        continue
+                    # Exclude if very high cardinality for categorical
+                    if v in categorical_vars and df[v].nunique() > 10:
+                        continue
+                    default_vars.append(v)
+
+                # Limit to selected_vars if they're in the auto-suggested list
+                default_vars = [v for v in default_vars if v in selected_vars] if selected_vars else default_vars
             else:
-                st.info("Seleccione al menos una variable para construir la tabla.")
+                default_vars = [v for v in selected_vars if v in available_vars] if selected_vars else []
+
+            table1_vars = st.multiselect(
+                "Seleccione las variables para incluir en la Tabla 1:",
+                options=available_vars,
+                default=default_vars,
+                key="t1pro_vars_selector",
+                help="Puede incluir tanto variables numéricas como categóricas."
+            )
+
+            if not table1_vars:
+                st.info("📝 Seleccione al menos una variable para construir la Tabla 1.")
+            else:
+                st.divider()
+
+                # ==============================================================================
+                # PASO 3: OPCIONES DE REPORTE
+                # ==============================================================================
+                st.markdown("#### ⚙️ Paso 3: Opciones de Reporte")
+
+                col_opt1, col_opt2, col_opt3 = st.columns(3)
+
+                with col_opt1:
+                    show_pvalue = st.checkbox("Incluir p-valor", value=True, key="t1pro_show_pvalue", help="Calcula p-valores con tests apropiados (t-test, Mann-Whitney, ANOVA, Kruskal, Chi-square, Fisher).")
+                    show_smd = st.checkbox("Incluir SMD (recomendado)", value=True, key="t1pro_show_smd", help="Standardized Mean Difference: evalúa desequilibrio entre grupos independiente del tamaño muestral.")
+
+                with col_opt2:
+                    show_missing = st.checkbox("Mostrar missing por grupo", value=True, key="t1pro_show_missing", help="Agrega columna con conteo y % de valores faltantes.")
+
+                    numeric_format = st.selectbox(
+                        "Formato numérico:",
+                        options=["Auto (según normalidad)", "Siempre Media±DE", "Siempre Mediana (IQR)"],
+                        index=0,
+                        key="t1pro_numeric_format",
+                        help="Auto usa Shapiro/KS para decidir; las otras opciones fuerzan el formato."
+                    )
+
+                with col_opt3:
+                    decimals = st.slider(
+                        "Decimales para variables continuas:",
+                        min_value=0,
+                        max_value=4,
+                        value=2,
+                        key="t1pro_decimals",
+                        help="Número de decimales a mostrar en medias, medianas, etc."
+                    )
+
+                st.divider()
+
+                # ==============================================================================
+                # GENERAR TABLA 1
+                # ==============================================================================
+                st.markdown("#### 📊 Tabla 1: Características Basales")
+
+                # Map format selection
+                if numeric_format == "Siempre Media±DE":
+                    format_type = 'mean_sd'
+                    force_parametric = 'parametric'
+                elif numeric_format == "Siempre Mediana (IQR)":
+                    format_type = 'median_iqr'
+                    force_parametric = 'nonparametric'
+                else:
+                    format_type = 'auto'
+                    force_parametric = None
+
+                with st.spinner("🔬 Calculando estadísticas, SMD y p-valores..."):
+                    # Build Table 1 rows
+                    table1_rows = []
+
+                    numeric_vars_in_table = df[table1_vars].select_dtypes(include=[np.number]).columns.tolist()
+                    categorical_vars_in_table = [v for v in table1_vars if v not in numeric_vars_in_table]
+
+                    # Process numeric variables
+                    for var in numeric_vars_in_table:
+                        row = _build_table1_row_numeric(
+                            df, var, group_col_comp, groups,
+                            format_type=format_type,
+                            decimals=decimals,
+                            show_missing=show_missing,
+                            show_pvalue=show_pvalue,
+                            show_smd=show_smd,
+                            force_parametric=force_parametric
+                        )
+                        table1_rows.append(row)
+
+                    # Process categorical variables
+                    for var in categorical_vars_in_table:
+                        rows = _build_table1_rows_categorical(
+                            df, var, group_col_comp, groups,
+                            show_missing=show_missing,
+                            show_pvalue=show_pvalue,
+                            show_smd=show_smd
+                        )
+                        table1_rows.extend(rows)
+
+                # Create DataFrame
+                df_table1 = pd.DataFrame(table1_rows)
+
+                if not df_table1.empty:
+                    # Render HTML table
+                    html_table = _render_table1_html(df_table1, max_height_px=600)
+                    components.html(html_table, height=650, scrolling=True)
+
+                    # Caption with configuration info
+                    caption_parts = []
+                    caption_parts.append(f"**Configuración:** {numeric_format}")
+                    if show_pvalue:
+                        caption_parts.append("P-valores incluidos")
+                    if show_smd:
+                        caption_parts.append("SMD incluido")
+                    if show_missing:
+                        caption_parts.append(f"Missing incluido (filtro ≤{max_missing_pct}%)")
+
+                    st.caption(" | ".join(caption_parts))
+
+                    # Quick interpretation
+                    st.markdown("##### 🔍 Interpretación Rápida")
+
+                    # Find significant variables
+                    sig_vars = []
+                    high_smd_vars = []
+
+                    for _, row in df_table1.iterrows():
+                        if row.get('is_header') or row.get('is_subrow'):
+                            continue
+
+                        var_name = row.get('Variable', '')
+
+                        # Check p-value
+                        if show_pvalue:
+                            p_val_str = row.get('P-Value', '')
+                            if p_val_str and p_val_str not in ['—', 'N/A', '']:
+                                try:
+                                    if p_val_str.startswith('<') or float(p_val_str) < 0.05:
+                                        sig_vars.append(var_name)
+                                except:
+                                    pass
+
+                        # Check SMD
+                        if show_smd:
+                            smd_str = row.get('SMD', '')
+                            if smd_str and smd_str not in ['—', 'N/A', 'N/A (>2 groups)', 'N/A (>2 cat)', '']:
+                                try:
+                                    smd_val = float(smd_str)
+                                    if smd_val > 0.20:
+                                        high_smd_vars.append((var_name, smd_val))
+                                except:
+                                    pass
+
+                    col_interp1, col_interp2 = st.columns(2)
+
+                    with col_interp1:
+                        if sig_vars:
+                            st.success(f"**Variables con p < 0.05:** {', '.join(sig_vars)}")
+                        else:
+                            st.info("**Variables con p < 0.05:** Ninguna")
+
+                    with col_interp2:
+                        if high_smd_vars:
+                            high_smd_names = [f"{v} ({s:.2f})" for v, s in high_smd_vars]
+                            st.warning(f"**Variables con SMD > 0.20:** {', '.join(high_smd_names)}")
+                        else:
+                            st.info("**Variables con SMD > 0.20:** Ninguna")
+
+                    if show_smd:
+                        st.caption("💡 **Interpretación SMD:** <0.10 = desequilibrio despreciable; 0.10–0.20 = pequeño; >0.20 = relevante (considerar ajustar en análisis multivariado).")
+
+                    st.divider()
+
+                    # ==============================================================================
+                    # EXPORTACIÓN Y AI
+                    # ==============================================================================
+
+                    # Prepare export DataFrame (remove helper columns)
+                    df_export = df_table1.drop(columns=['is_header', 'is_subrow'], errors='ignore')
+
+                    boton_guardar_tabla(
+                        df_export,
+                        f"Tabla1_Pro_{group_col_comp}",
+                        "btn_tabla1_pro",
+                        orientacion="Horizontal (como SPSS)"
+                    )
+
+                    # AI Integration
+                    notas_ai = f"""
+                    Tabla 1 (Características Basales) comparando grupos por {group_col_comp}.
+
+                    - N total: {total_n}
+                    - N por grupo: {', '.join([f'{g}: {group_counts.get(g, 0)}' for g in groups])}
+                    - Formato numérico: {numeric_format}
+                    - SMD incluido: {'Sí' if show_smd else 'No'}
+                    - P-valores incluidos: {'Sí' if show_pvalue else 'No'}
+                    - Filtro missing: ≤{max_missing_pct}%
+                    - Variables incluidas: {len(table1_vars)} ({len(numeric_vars_in_table)} numéricas, {len(categorical_vars_in_table)} categóricas)
+                    """
+
+                    ai_actions_for_result(
+                        df_export,
+                        f"Tabla 1 (Pro): Comparativa por {group_col_comp}",
+                        notas=notas_ai,
+                        key="ai_table1_pro"
+                    )
+
+                else:
+                    st.error("❌ No se pudo generar la Tabla 1. Verifique que las variables seleccionadas tengan datos suficientes.")
     
     # ==============================================================================
     # PESTAÑA 3: GRÁFICOS DIAGNÓSTICOS
